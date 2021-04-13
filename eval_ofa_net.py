@@ -10,7 +10,6 @@ from ofa.imagenet_classification.data_providers.imagenet import ImagenetDataProv
 from ofa.imagenet_classification.run_manager import ImagenetRunConfig, RunManager
 from ofa.model_zoo import ofa_net
 
-
 parser = argparse.ArgumentParser()
 parser.add_argument(
     '-p',

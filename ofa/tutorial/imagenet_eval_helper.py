@@ -60,7 +60,6 @@ def calib_bn(net, path, image_size, batch_size, num_images=2000):
     set_running_statistics(net, data_loader)
 
 
-
 def validate(net, path, image_size, data_loader, batch_size=100, device='cuda:0'):
     if 'cuda' in device:
         net = torch.nn.DataParallel(net).to(device)
@@ -107,26 +106,27 @@ def validate(net, path, image_size, data_loader, batch_size=100, device='cuda:0'
                 })
                 t.update(1)
 
-    
     print('Results: loss=%.5f,\t top1=%.1f,\t top5=%.1f' % (losses.avg, top1.avg, top5.avg))
     return top1.avg
-    
+
 
 def evaluate_ofa_specialized(path, data_loader, batch_size=100, device='cuda:0'):
     def select_platform_name():
         valid_platform_name = [
             'pixel1', 'pixel2', 'note10', 'note8', 's7edge', 'lg-g8', '1080ti', 'v100', 'tx2', 'cpu', 'flops'
         ]
-        
-        print("Please select a hardware platform from ('pixel1', 'pixel2', 'note10', 'note8', 's7edge', 'lg-g8', '1080ti', 'v100', 'tx2', 'cpu', 'flops')!\n")
-        
+
+        print(
+            "Please select a hardware platform from ('pixel1', 'pixel2', 'note10', 'note8', 's7edge', 'lg-g8', '1080ti', 'v100', 'tx2', 'cpu', 'flops')!\n")
+
         while True:
             platform_name = input()
             platform_name = platform_name.lower()
             if platform_name in valid_platform_name:
                 return platform_name
-            print("Platform name is invalid! Please select in ('pixel1', 'pixel2', 'note10', 'note8', 's7edge', 'lg-g8', '1080ti', 'v100', 'tx2', 'cpu', 'flops')!\n")
-    
+            print(
+                "Platform name is invalid! Please select in ('pixel1', 'pixel2', 'note10', 'note8', 's7edge', 'lg-g8', '1080ti', 'v100', 'tx2', 'cpu', 'flops')!\n")
+
     def select_netid(platform_name):
         platform_efficiency_map = {
             'pixel1': {
@@ -138,14 +138,14 @@ def evaluate_ofa_specialized(path, data_loader, batch_size=100, device='cuda:0')
                 28: 'pixel1_lat@28ms_top1@73.3_finetune@25',
                 20: 'pixel1_lat@20ms_top1@71.4_finetune@25',
             },
-            
+
             'pixel2': {
                 62: 'pixel2_lat@62ms_top1@75.8_finetune@25',
                 50: 'pixel2_lat@50ms_top1@74.7_finetune@25',
                 35: 'pixel2_lat@35ms_top1@73.4_finetune@25',
                 25: 'pixel2_lat@25ms_top1@71.5_finetune@25',
             },
-            
+
             'note10': {
                 64: 'note10_lat@64ms_top1@80.2_finetune@75',
                 50: 'note10_lat@50ms_top1@79.7_finetune@75',
@@ -156,69 +156,71 @@ def evaluate_ofa_specialized(path, data_loader, batch_size=100, device='cuda:0')
                 11: 'note10_lat@11ms_top1@73.6_finetune@25',
                 8: 'note10_lat@8ms_top1@71.4_finetune@25',
             },
-            
+
             'note8': {
                 65: 'note8_lat@65ms_top1@76.1_finetune@25',
                 49: 'note8_lat@49ms_top1@74.9_finetune@25',
                 31: 'note8_lat@31ms_top1@72.8_finetune@25',
                 22: 'note8_lat@22ms_top1@70.4_finetune@25',
             },
-            
+
             's7edge': {
                 88: 's7edge_lat@88ms_top1@76.3_finetune@25',
                 58: 's7edge_lat@58ms_top1@74.7_finetune@25',
                 41: 's7edge_lat@41ms_top1@73.1_finetune@25',
                 29: 's7edge_lat@29ms_top1@70.5_finetune@25',
             },
-            
+
             'lg-g8': {
                 24: 'LG-G8_lat@24ms_top1@76.4_finetune@25',
                 16: 'LG-G8_lat@16ms_top1@74.7_finetune@25',
                 11: 'LG-G8_lat@11ms_top1@73.0_finetune@25',
                 8: 'LG-G8_lat@8ms_top1@71.1_finetune@25',
             },
-            
+
             '1080ti': {
                 27: '1080ti_gpu64@27ms_top1@76.4_finetune@25',
                 22: '1080ti_gpu64@22ms_top1@75.3_finetune@25',
                 15: '1080ti_gpu64@15ms_top1@73.8_finetune@25',
                 12: '1080ti_gpu64@12ms_top1@72.6_finetune@25',
             },
-            
+
             'v100': {
                 11: 'v100_gpu64@11ms_top1@76.1_finetune@25',
                 9: 'v100_gpu64@9ms_top1@75.3_finetune@25',
                 6: 'v100_gpu64@6ms_top1@73.0_finetune@25',
                 5: 'v100_gpu64@5ms_top1@71.6_finetune@25',
             },
-            
+
             'tx2': {
                 96: 'tx2_gpu16@96ms_top1@75.8_finetune@25',
                 80: 'tx2_gpu16@80ms_top1@75.4_finetune@25',
                 47: 'tx2_gpu16@47ms_top1@72.9_finetune@25',
                 35: 'tx2_gpu16@35ms_top1@70.3_finetune@25',
             },
-            
+
             'cpu': {
                 17: 'cpu_lat@17ms_top1@75.7_finetune@25',
                 15: 'cpu_lat@15ms_top1@74.6_finetune@25',
                 11: 'cpu_lat@11ms_top1@72.0_finetune@25',
                 10: 'cpu_lat@10ms_top1@71.1_finetune@25',
             },
-            
+
             'flops': {
                 595: 'flops@595M_top1@80.0_finetune@75',
                 482: 'flops@482M_top1@79.6_finetune@75',
                 389: 'flops@389M_top1@79.1_finetune@75',
             }
         }
-        
+
         sub_efficiency_map = platform_efficiency_map[platform_name]
         if not platform_name == 'flops':
-            print("Now, please specify a latency constraint for model specialization among", sorted(list(sub_efficiency_map.keys())), 'ms. (Please just input the number.) \n')
+            print("Now, please specify a latency constraint for model specialization among",
+                  sorted(list(sub_efficiency_map.keys())), 'ms. (Please just input the number.) \n')
         else:
-            print("Now, please specify a FLOPs constraint for model specialization among", sorted(list(sub_efficiency_map.keys())), 'MFLOPs. (Please just input the number.) \n')
-        
+            print("Now, please specify a FLOPs constraint for model specialization among",
+                  sorted(list(sub_efficiency_map.keys())), 'MFLOPs. (Please just input the number.) \n')
+
         while True:
             efficiency_constraint = input()
             if not efficiency_constraint.isdigit():
@@ -238,4 +240,3 @@ def evaluate_ofa_specialized(path, data_loader, batch_size=100, device='cuda:0')
     validate(net, path, image_size, data_loader, batch_size, device)
 
     return net_id
-

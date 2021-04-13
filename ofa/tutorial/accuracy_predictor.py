@@ -63,7 +63,7 @@ class AccuracyPredictor:
         start = 0
         end = 4
         for d in d_list:
-            for j in range(start+d, end):
+            for j in range(start + d, end):
                 ks_list[j] = 0
                 ex_list[j] = 0
             start += 4

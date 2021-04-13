@@ -121,8 +121,8 @@ parser.add_argument(
     default='pixel1_lat@143ms_top1@80.1_finetune@75',
     choices=specialized_network_list,
     help='OFA specialized networks: ' +
-    ' | '.join(specialized_network_list) +
-    ' (default: pixel1_lat@143ms_top1@80.1_finetune@75)')
+         ' | '.join(specialized_network_list) +
+         ' (default: pixel1_lat@143ms_top1@80.1_finetune@75)')
 
 args = parser.parse_args()
 if args.gpu == 'all':

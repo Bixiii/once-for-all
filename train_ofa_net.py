@@ -114,7 +114,6 @@ args.independent_distributed_sampling = False
 args.kd_ratio = 1.0
 args.kd_type = 'ce'
 
-
 if __name__ == '__main__':
     os.makedirs(args.path, exist_ok=True)
 
@@ -222,6 +221,7 @@ if __name__ == '__main__':
               lambda _run_manager, epoch, is_test: validate(_run_manager, epoch, is_test, **validate_func_dict))
     elif args.task == 'depth':
         from ofa.imagenet_classification.elastic_nn.training.progressive_shrinking import train_elastic_depth
+
         if args.phase == 1:
             args.ofa_checkpoint_path = download_url(
                 'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K357',
@@ -235,6 +235,7 @@ if __name__ == '__main__':
         train_elastic_depth(train, distributed_run_manager, args, validate_func_dict)
     elif args.task == 'expand':
         from ofa.imagenet_classification.elastic_nn.training.progressive_shrinking import train_elastic_expand
+
         if args.phase == 1:
             args.ofa_checkpoint_path = download_url(
                 'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D234_E6_K357',
