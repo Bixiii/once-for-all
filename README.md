@@ -160,12 +160,12 @@ If the above scripts failed to download, you download it manually from [Google D
 mpirun -np 32 -H <server1_ip>:8,<server2_ip>:8,<server3_ip>:8,<server4_ip>:8 \
     -bind-to none -map-by slot \
     -x NCCL_DEBUG=INFO -x LD_LIBRARY_PATH -x PATH \
-    python train_ofa_net.py
+    python train_ofa_net_original.py
 ```
 or 
 ```bash
 horovodrun -np 32 -H <server1_ip>:8,<server2_ip>:8,<server3_ip>:8,<server4_ip>:8 \
-    python train_ofa_net.py
+    python train_ofa_net_original.py
 ```
 
 ## Introduction Video
