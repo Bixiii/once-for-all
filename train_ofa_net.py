@@ -13,11 +13,11 @@ import torch
 from ofa.imagenet_classification.elastic_nn.modules.dynamic_op import (
     DynamicSeparableConv2d,
 )
-from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3
+from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3, OFAResNets
 from ofa.imagenet_classification.elastic_nn.training.progressive_shrinking import (
     load_models,
 )
-from ofa.imagenet_classification.networks import MobileNetV3Large
+from ofa.imagenet_classification.networks import MobileNetV3Large, SmallResNets, ResNet50D
 from ofa.imagenet_classification.run_manager import DistributedImageNetRunConfig
 from ofa.imagenet_classification.run_manager.distributed_run_manager import (
     DistributedRunManager,
@@ -32,6 +32,9 @@ from settings import deactivate_cuda
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--dataset", type=str, default="imagenet", choices=["imagenet", "cifar10"]
+)
+parser.add_argument(
+    '--net', type=str, default='MobileNetV3', choices=['MobileNetV3', 'ResNet18', 'ResNet50']
 )
 parser.add_argument(
     "--task",
@@ -53,7 +56,6 @@ args.image_size = None
 if args.task == "supernet":
     args.path = "exp/supernet"
     args.dynamic_batch_size = 1
-    #  TODO this does not make sense - if I adapt that for cifar I get loss=nan
     if args.dataset == 'imagenet':
         args.image_size = '224'
         args.base_lr = 0.08
@@ -179,6 +181,7 @@ if __name__ == "__main__":
     if not deactivate_cuda:
         torch.cuda.set_device(hvd.local_rank())
 
+    # TODO get rid of the downloading of pretrained stuff
     args.teacher_path = download_url(
         "https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K7",
         model_dir=".torch/ofa_checkpoints/%d" % hvd.rank(),
@@ -224,15 +227,32 @@ if __name__ == "__main__":
     DynamicSeparableConv2d.KERNEL_TRANSFORM_MODE = args.dy_conv_scaling_mode
 
     if args.task == "supernet":
-        net = MobileNetV3Large(
-            n_classes=run_config.data_provider.n_classes,
-            bn_param=(args.bn_momentum, args.bn_eps),
-            dropout_rate=args.dropout,
-            width_mult=1.0,
-            ks=7,
-            expand_ratio=6,
-            depth_param=4,
-        )
+
+        if args.net == 'ResNet18':
+            net = SmallResNets(
+                n_classes=run_config.data_provider.n_classes,
+                bn_param=(args.bn_momentum, args.bn_eps),
+                dropout_rate=args.dropout,
+                depth_list=[3, 4, 6, 3],  # ResNet34 as teacher model
+                width_mult=1.0,
+            )
+        elif args.net == 'MobileNetV3':
+            net = MobileNetV3Large(  # MobileNetV3Large as teacher model
+                n_classes=run_config.data_provider.n_classes,
+                bn_param=(args.bn_momentum, args.bn_eps),
+                dropout_rate=args.dropout,
+                width_mult=1.0,
+                ks=7,
+                expand_ratio=6,
+                depth_param=4,
+            )
+        elif args.net == 'ResNet50':
+            net = ResNet50D(  # ResNet50D (dense) as teacher model
+                n_classes=run_config.data_provider.n_classes,
+                bn_param=(args.bn_momentum, args.bn_eps),
+                dropout_rate=args.dropout,
+                width_mult=1.0,
+            )
     else:
         # build net from args
         args.width_mult_list = [
@@ -247,16 +267,29 @@ if __name__ == "__main__":
             if len(args.width_mult_list) == 1
             else args.width_mult_list
         )
-        net = OFAMobileNetV3(
-            n_classes=run_config.data_provider.n_classes,
-            bn_param=(args.bn_momentum, args.bn_eps),
-            dropout_rate=args.dropout,
-            base_stage_width=args.base_stage_width,
-            width_mult=args.width_mult_list,
-            ks_list=args.ks_list,
-            expand_ratio_list=args.expand_list,
-            depth_list=args.depth_list,
-        )
+        if args.net == 'ResNet18':
+            # TODO
+            pass
+        elif args.net == 'MobileNetV3':
+            net = OFAMobileNetV3(
+                n_classes=run_config.data_provider.n_classes,
+                bn_param=(args.bn_momentum, args.bn_eps),
+                dropout_rate=args.dropout,
+                base_stage_width=args.base_stage_width,
+                width_mult=args.width_mult_list,
+                ks_list=args.ks_list,
+                expand_ratio_list=args.expand_list,
+                depth_list=args.depth_list,
+            )
+        elif args.net == 'ResNet50':
+            net = OFAResNets(
+                n_classes=run_config.data_provider.n_classes,
+                bn_param=(args.bn_momentum, args.bn_eps),
+                dropout_rate=args.dropout,
+                expand_ratio_list=args.expand_list,
+                depth_list=args.depth_list,
+            )
+
     # teacher model
     if args.kd_ratio > 0:
         args.teacher_model = MobileNetV3Large(
