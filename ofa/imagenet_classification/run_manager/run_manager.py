@@ -18,6 +18,8 @@ from ofa.utils import get_net_info, cross_entropy_loss_with_soft_target, cross_e
 from ofa.utils import AverageMeter, accuracy, write_log, mix_images, mix_labels, init_models
 from ofa.utils import MyRandomResizedCrop
 
+from settings import deactivate_cuda
+
 __all__ = ['RunManager']
 
 
@@ -85,7 +87,8 @@ class RunManager:
                         net_params.append(param)
         self.optimizer = self.run_config.build_optimizer(net_params)
 
-        self.net = torch.nn.DataParallel(self.net)
+        if not deactivate_cuda:
+            self.net = torch.nn.DataParallel(self.net)
 
     """ save path and log path """
 
@@ -211,7 +214,7 @@ class RunManager:
     def validate(self, epoch=0, is_test=False, run_str='', net=None, data_loader=None, no_logs=False, train_mode=False):
         if net is None:
             net = self.net
-        if not isinstance(net, nn.DataParallel):
+        if not isinstance(net, nn.DataParallel) and not deactivate_cuda:
             net = nn.DataParallel(net)
 
         if data_loader is None:

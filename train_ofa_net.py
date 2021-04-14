@@ -24,6 +24,11 @@ from ofa.imagenet_classification.run_manager.distributed_run_manager import (
 )
 from ofa.utils import MyRandomResizedCrop, download_url
 
+from settings import deactivate_cuda
+
+# TODO this variable is also need in `ofa/imagenet_classificaton/run_manager/distributed_run_manager.py` <- make it
+#  somehow global or importable
+
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--dataset", type=str, default="imagenet", choices=["imagenet", "cifar10"]
@@ -48,12 +53,13 @@ args.image_size = None
 if args.task == "supernet":
     args.path = "exp/supernet"
     args.dynamic_batch_size = 1
+    #  TODO this does not make sense - if I adapt that for cifar I get loss=nan
     if args.dataset == 'imagenet':
-        args.image_size = 224
+        args.image_size = '224'
         args.base_lr = 0.08
     elif args.dataset == 'cifar10':
-        args.image_size = 32
-        args.base_lr = 0.8
+        args.image_size = '32'
+        args.base_lr = 0.08
     args.n_epochs = 350
     args.warmup_epochs = 5
     args.warmup_lr = -1
@@ -170,7 +176,8 @@ if __name__ == "__main__":
     # Initialize Horovod
     hvd.init()
     # Pin GPU to be used to process local rank (one GPU per process)
-    torch.cuda.set_device(hvd.local_rank())
+    if not deactivate_cuda:
+        torch.cuda.set_device(hvd.local_rank())
 
     args.teacher_path = download_url(
         "https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K7",

@@ -16,8 +16,9 @@ from ofa.utils import cross_entropy_with_label_smoothing, cross_entropy_loss_wit
 from ofa.utils import DistributedMetric, list_mean, get_net_info, accuracy, AverageMeter, mix_labels, mix_images
 from ofa.utils import MyRandomResizedCrop
 
-__all__ = ['DistributedRunManager']
+from settings import deactivate_cuda
 
+__all__ = ['DistributedRunManager']
 
 class DistributedRunManager:
 
@@ -34,8 +35,9 @@ class DistributedRunManager:
 
         os.makedirs(self.path, exist_ok=True)
 
-        self.net.cuda()
-        cudnn.benchmark = True
+        if not deactivate_cuda:
+            self.net.cuda()
+            cudnn.benchmark = True
         if init and self.is_root:
             init_models(self.net, self.run_config.model_init)
         if self.is_root:
@@ -236,7 +238,8 @@ class DistributedRunManager:
                       desc='Validate Epoch #{} {}'.format(epoch + 1, run_str),
                       disable=no_logs or not self.is_root) as t:
                 for i, (images, labels) in enumerate(data_loader):
-                    images, labels = images.cuda(), labels.cuda()
+                    if not deactivate_cuda:
+                        images, labels = images.cuda(), labels.cuda()
                     # compute output
                     output = net(images)
                     loss = self.test_criterion(output, labels)
@@ -294,7 +297,8 @@ class DistributedRunManager:
                 else:
                     new_lr = self.run_config.adjust_learning_rate(self.optimizer, epoch - warmup_epochs, i, nBatch)
 
-                images, labels = images.cuda(), labels.cuda()
+                if not deactivate_cuda:
+                    images, labels = images.cuda(), labels.cuda()
                 target = labels
                 if isinstance(self.run_config.mixup_alpha, float):
                     # transform data
