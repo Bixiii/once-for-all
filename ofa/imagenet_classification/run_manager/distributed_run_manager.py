@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
+from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from ofa.utils import cross_entropy_with_label_smoothing, cross_entropy_loss_with_soft_target, write_log, init_models
@@ -84,6 +85,9 @@ class DistributedRunManager:
             self.optimizer, named_parameters=self.net.named_parameters(), compression=hvd_compression,
             backward_passes_per_step=backward_steps,
         )
+        # Tensorboard set-up
+        # TODO import comment from main
+        self.tensorboard_writer = SummaryWriter(comment='TestNet' + '_32x32_cifar10_bs' + '128' + 'lr' + '0.1')
 
     """ save path and log path """
 
@@ -375,6 +379,11 @@ class DistributedRunManager:
                     'optimizer': self.optimizer.state_dict(),
                     'state_dict': self.net.state_dict(),
                 }, is_best=is_best)
+                if is_best:
+                    best_path_full_net = os.path.join(self.save_path, 'model_best_full_net.pth.tar')
+                    torch.save(self.net, best_path_full_net)
+            self.tensorboard_writer.add_scalar('test accuracy', list_mean(val_top1), epoch)
+            self.tensorboard_writer.add_scalar('loss', train_loss, epoch)
 
     def reset_running_statistics(self, net=None, subset_size=2000, subset_batch_size=200, data_loader=None):
         from ofa.imagenet_classification.elastic_nn.utils import set_running_statistics
