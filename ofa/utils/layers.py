@@ -32,6 +32,7 @@ def set_layer_from_config(layer_config):
         ##########################################################
         ResidualBlock.__name__: ResidualBlock,
         ResNetBottleneckBlock.__name__: ResNetBottleneckBlock,
+        ResNetBasicBlock.__name__: ResNetBasicBlock
     }
 
     layer_name = layer_config.pop('name')
