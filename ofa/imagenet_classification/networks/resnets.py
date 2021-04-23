@@ -196,7 +196,7 @@ class ResNet50D(ResNets):
 # ResNet34 depth_list=[3, 4, 6, 3]
 class SmallResNets(ResNets):
 
-    def __init__(self, n_classes=10, width_mult=1.0, bn_param=(0.1, 1e-5), dropout_rate=0, depth_list=[2, 2, 2, 2], depth_param=None):
+    def __init__(self, n_classes=10, width_mult=1.0, bn_param=(0.1, 1e-5), dropout_rate=0, blocks_per_layer_list=[2, 2, 2, 2], depth_param=None):
 
         input_channel = make_divisible(64 * width_mult, MyNetwork.CHANNEL_DIVISIBLE)
         stage_width_list = [64, 128, 256, 512]
@@ -204,8 +204,8 @@ class SmallResNets(ResNets):
             stage_width_list[i] = make_divisible(width * width_mult, MyNetwork.CHANNEL_DIVISIBLE)
 
         if depth_param is not None:
-            for i, depth in enumerate(ResNets.BASE_DEPTH_LIST):
-                depth_list[i] = depth + depth_param
+            for i, depth in enumerate(blocks_per_layer_list):
+                blocks_per_layer_list[i] = depth + depth_param
 
         stride_list = [1, 2, 2, 2]
 
@@ -217,7 +217,7 @@ class SmallResNets(ResNets):
         # blocks
         blocks = []
         layer_num = 0
-        for d, width, s in zip(depth_list, stage_width_list, stride_list):
+        for d, width, s in zip(blocks_per_layer_list, stage_width_list, stride_list):
             layer_num += 1
             for i in range(d):
                 stride = s if i == 0 else 1
