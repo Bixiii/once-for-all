@@ -31,6 +31,7 @@ def sort_dict(src_dict, reverse=False, return_dict=True):
         return output
 
 
+# kernel_size // 2
 def get_same_padding(kernel_size):
     if isinstance(kernel_size, tuple):
         assert len(kernel_size) == 2, 'invalid kernel size: %s' % kernel_size
