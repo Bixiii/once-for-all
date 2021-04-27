@@ -291,7 +291,7 @@ class OFASmallResNets(ResNets):
                 make_divisible(width * width_mult, MyNetwork.CHANNEL_DIVISIBLE) for width_mult in self.width_mult_list
             ]
 
-        # TODO adapt n_block_list correctly
+        # TODO: check n_block_list
         # n_block_list = [base_depth + max(self.depth_list) for base_depth in ResNets.BASE_DEPTH_LIST]
         base_depth_list = [1, 1, 1, 1]
         n_block_list = [base_depth + max(self.depth_list) for base_depth in base_depth_list]

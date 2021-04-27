@@ -214,9 +214,6 @@ class Cifar10DataProvider(DataProvider):
 
         # random_resize_crop -> random_horizontal_flip
         train_transforms = [
-            resize_transform_class(
-                image_size, scale=(self.resize_scale, 1.0), interpolation=Image.BICUBIC
-            ),
             transforms.RandomHorizontalFlip(),
         ]
 
