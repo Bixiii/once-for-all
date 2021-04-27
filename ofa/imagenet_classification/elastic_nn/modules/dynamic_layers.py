@@ -661,7 +661,7 @@ class DynamicResNetBasicBlock(MyModule):
             self.downsample = IdentityLayer(max(self.in_channel_list), max(self.out_channel_list))
         elif self.downsample_mode == 'conv':
             self.downsample = nn.Sequential(OrderedDict([
-                ('conv', DynamicConv2d(max(self.in_channel_list), max(self.out_channel_list), stride=stride)),
+                ('conv', DynamicConv2d(max(self.in_channel_list), max(self.out_channel_list), stride=1)),
                 ('bn', DynamicBatchNorm2d(max(self.out_channel_list))),
             ]))
         elif self.downsample_mode == 'avgpool_conv':
@@ -766,7 +766,7 @@ class DynamicResNetBasicBlock(MyModule):
             'downsample_mode': self.downsample_mode,
         }
 
-    # TODO: this is not correctly adapted yet, first find out where this is used
+    # TODO: something might be wrong here
     def re_organize_middle_weights(self, expand_ratio_stage=0):
         # conv2 -> conv1
         importance = torch.sum(torch.abs(self.conv1.conv.conv.weight.data), dim=(0, 2, 3))

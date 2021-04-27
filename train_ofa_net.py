@@ -26,9 +26,6 @@ from ofa.utils import MyRandomResizedCrop, download_url
 
 from settings import deactivate_cuda
 
-# TODO this variable is also need in `ofa/imagenet_classificaton/run_manager/distributed_run_manager.py` <- make it
-#  somehow global or importable
-
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--dataset", type=str, default="imagenet", choices=["imagenet", "cifar10"]
@@ -98,7 +95,7 @@ elif args.task == "kernel":
     args.expand_list = "6"
     args.depth_list = "4"
 elif args.task == "depth":
-    args.source_path = "exp/baseline_2_kernel"
+    args.source_path = "exp/baseline_2_kernel/phase2"
     args.target_path = "exp/kernel_2_kernel_depth/phase%d" % args.phase
     args.dynamic_batch_size = 2
     if args.phase == 1:
@@ -118,7 +115,7 @@ elif args.task == "depth":
         args.expand_list = "6"
         args.depth_list = "2,3,4"
 elif args.task == "expand":
-    args.source_path = "exp/kernel_2_kernel_depth/phase%d" % args.phase
+    args.source_path = "exp/kernel_2_kernel_depth/phase2"
     args.target_path = "exp/kernel_depth_2_kernel_depth_width/phase%d" % args.phase
     args.dynamic_batch_size = 4
     if args.phase == 1:
@@ -187,7 +184,7 @@ args.kd_type = "ce"
 
 args.dropout = 0.1
 # for different params in supernet task
-if args.task == "supernet":
+if args.task == 'supernet' or 'baseline':
     args.dy_conv_scaling_mode = -1
     args.kd_ratio = -1.0  # not using teacher model
     args.teacher_model = None
@@ -288,15 +285,7 @@ if __name__ == "__main__":
                 width_mult=1.0,
             )
         elif args.net == 'MobileNetV3':
-            net = MobileNetV3(  # MobileNetV3Large as teacher model
-                n_classes=run_config.data_provider.n_classes,
-                bn_param=(args.bn_momentum, args.bn_eps),
-                dropout_rate=args.dropout,
-                width_mult=1.0,
-                ks=7,
-                expand_ratio=6,
-                depth_param=4,
-            )
+            raise NotImplementedError
         elif args.net == 'ResNet50':
             net = ResNet50(
                 n_classes=run_config.data_provider.n_classes,
@@ -401,7 +390,7 @@ if __name__ == "__main__":
         )
 
     # training supernet
-    if args.task == "supernet":
+    if args.task == "supernet" or 'baseline':
         distributed_run_manager.train(
             args, warmup_epochs=args.warmup_epochs, warmup_lr=args.warmup_lr
         )
