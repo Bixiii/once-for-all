@@ -59,8 +59,8 @@ parser.add_argument("--resume", action="store_true")
 args = parser.parse_args()
 
 args.image_size = None
-if args.task == "supernet":
-    args.target_path = "exp/supernet"
+if args.task == 'supernet':
+    args.target_path = 'exp/supernet'
     args.dynamic_batch_size = 1
     if args.dataset == 'imagenet':
         args.image_size = '224'
@@ -68,9 +68,10 @@ if args.task == "supernet":
     elif args.dataset == 'cifar10':
         args.image_size = '32'
         args.base_lr = 0.08
-    args.n_epochs = 450
-    args.warmup_epochs = 5
+    args.n_epochs = 500
+    args.warmup_epochs = 0
     args.warmup_lr = -1
+    args.phase = 0
 elif args.task == 'baseline':
     args.target_path = "exp/baseline"
     args.dynamic_batch_size = 1
@@ -80,12 +81,13 @@ elif args.task == 'baseline':
     elif args.dataset == 'cifar10':
         args.image_size = '32'
         args.base_lr = 0.08
-    args.n_epochs = 450
-    args.warmup_epochs = 5
+    args.n_epochs = 500
+    args.warmup_epochs = 0
     args.warmup_lr = -1
-elif args.task == "kernel":
+    args.phase = 0
+elif args.task == 'kernel':
     args.source_path = 'exp/baseline'
-    args.target_path = "exp/baseline_2_kernel"
+    args.target_path = 'exp/baseline_2_kernel'
     args.dynamic_batch_size = 1
     args.n_epochs = 120
     args.base_lr = 3e-2
@@ -95,10 +97,10 @@ elif args.task == "kernel":
     args.expand_list = "6"
     args.depth_list = "4"
 elif args.task == "depth":
-    args.source_path = "exp/baseline_2_kernel/phase2"
-    args.target_path = "exp/kernel_2_kernel_depth/phase%d" % args.phase
     args.dynamic_batch_size = 2
     if args.phase == 1:
+        args.source_path = 'exp/baseline_2_kernel'
+        args.target_path = 'exp/kernel_2_kernel_depth/phase1'
         args.n_epochs = 25
         args.base_lr = 2.5e-3
         args.warmup_epochs = 0
@@ -107,6 +109,8 @@ elif args.task == "depth":
         args.expand_list = "6"
         args.depth_list = "3,4"
     else:
+        args.source_path = 'exp/kernel_2_kernel_depth/phase1'
+        args.target_path = 'exp/kernel_2_kernel_depth/phase2'
         args.n_epochs = 120
         args.base_lr = 7.5e-3
         args.warmup_epochs = 5
@@ -115,10 +119,10 @@ elif args.task == "depth":
         args.expand_list = "6"
         args.depth_list = "2,3,4"
 elif args.task == "expand":
-    args.source_path = "exp/kernel_2_kernel_depth/phase2"
-    args.target_path = "exp/kernel_depth_2_kernel_depth_width/phase%d" % args.phase
     args.dynamic_batch_size = 4
     if args.phase == 1:
+        args.source_path = 'exp/kernel_2_kernel_depth/phase2'
+        args.target_path = 'exp/kernel_depth_2_kernel_depth_width/phase1'
         args.n_epochs = 25
         args.base_lr = 2.5e-3
         args.warmup_epochs = 0
@@ -127,6 +131,8 @@ elif args.task == "expand":
         args.expand_list = "4,6"
         args.depth_list = "2,3,4"
     else:
+        args.source_path = 'exp/kernel_depth_2_kernel_depth_width/phase1'
+        args.target_path = 'exp/kernel_depth_2_kernel_depth_width/phase2'
         args.n_epochs = 120
         args.base_lr = 7.5e-3
         args.warmup_epochs = 5
@@ -137,6 +143,8 @@ elif args.task == "expand":
 else:
     raise NotImplementedError
 
+comment = args.task + str(args.phase)
+
 args.manual_seed = 0
 
 args.lr_schedule_type = "cosine"
@@ -145,18 +153,30 @@ args.valid_size = 10000
 
 args.opt_type = "sgd"
 args.momentum = 0.9
-args.no_nesterov = False
-args.label_smoothing = 0.1
-args.no_decay_keys = "bn#bias"
+if args.dataset == 'imagenet':
+    args.no_nesterov = False
+    args.label_smoothing = 0.1
+    args.no_decay_keys = "bn#bias"
+elif args.dataset == 'cifar10':
+    args.no_nesterov = True
+    args.label_smoothing = 0.01
+    args.no_decay_keys = None
+
 args.fp16_allreduce = False
 
 args.model_init = "he_fout"
 args.validation_frequency = 1
 args.print_frequency = 10
 
-args.n_worker = 8
+args.n_worker = 0
 
-args.distort_color = "tf"
+if args.dataset == 'imagenet':
+    args.distort_color = "tf"
+elif args.dataset == 'cifar10':
+    args.distort_color = None
+else:
+    args.distort_color = None
+
 args.continuous_size = True
 args.not_sync_distributed_image_size = False
 
@@ -168,10 +188,10 @@ if args.dataset == 'imagenet':
     args.weight_decay = 3e-5
 elif args.dataset == 'cifar10':
     if args.image_size is None:
-        args.image_size = '16,24,32'
-    args.resize_scale = 0.8
+        args.image_size = '32'  # TODO define different resolutions
+    args.resize_scale = 1
     args.base_batch_size = 128
-    args.weight_decay = 4e-5
+    args.weight_decay = 5e-4
 
 args.bn_momentum = 0.1
 args.bn_eps = 1e-5
@@ -196,6 +216,7 @@ else:
 if __name__ == "__main__":
     os.makedirs(args.target_path, exist_ok=True)
 
+    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
     # Initialize Horovod
     hvd.init()
     # Pin GPU to be used to process local rank (one GPU per process)
@@ -234,9 +255,10 @@ if __name__ == "__main__":
     if args.warmup_lr < 0:
         args.warmup_lr = args.base_lr
     args.train_batch_size = args.base_batch_size
-    args.test_batch_size = args.base_batch_size * 2
+    args.test_batch_size = args.base_batch_size
     run_config = DistributedImageNetRunConfig(
-        **args.__dict__, num_replicas=num_gpus, rank=hvd.rank()
+        # **args.__dict__, num_replicas=num_gpus if args.dataset == 'imagenet' else None, rank=hvd.rank()
+        **args.__dict__, num_replicas=num_gpus, rank=hvd.rank(), comment=comment
     )
 
     # print run config information
@@ -378,6 +400,7 @@ if __name__ == "__main__":
         compression,
         backward_steps=args.dynamic_batch_size,
         is_root=(hvd.rank() == 0),
+        comment=comment,
     )
     distributed_run_manager.save_config()
     # hvd broadcast

@@ -23,7 +23,7 @@ __all__ = ['DistributedRunManager']
 
 class DistributedRunManager:
 
-    def __init__(self, path, net, run_config, hvd_compression, backward_steps=1, is_root=False, init=True):
+    def __init__(self, path, net, run_config, hvd_compression, backward_steps=1, is_root=False, init=True, comment=''):
         import horovod.torch as hvd
 
         self.path = path
@@ -87,7 +87,7 @@ class DistributedRunManager:
         )
         # Tensorboard set-up
         # TODO import comment from main pt_Net_32x32_cifar10_bs128lr0.08_ofa_task
-        self.tensorboard_writer = SummaryWriter(comment='TestNet' + '_32x32_cifar10_bs' + '128' + 'lr' + '0.1')
+        self.tensorboard_writer = SummaryWriter(comment='OFANet' + comment + '_32x32_cifar10_bs' + '128' + 'lr' + '0.08')
 
     """ save path and log path """
 

@@ -21,13 +21,15 @@ class Cifar10DataProvider(DataProvider):
     def __init__(
         self,
         save_path=None,
-        train_batch_size=256,
-        test_batch_size=512,
-        valid_size=None,
+        train_batch_size=128,
+        test_batch_size=128,
         n_worker=0,
-        resize_scale=0.08,
-        distort_color=None,
         image_size=32,
+        valid_size=None,
+
+            # unused but here for compatibility
+        resize_scale=1,
+        distort_color=None,
         num_replicas=None,
         rank=None,
     ):
@@ -41,20 +43,21 @@ class Cifar10DataProvider(DataProvider):
 
         self._valid_transform_dict = {}
         if not isinstance(self.image_size, int):
-            from ofa.utils.my_dataloader import MyDataLoader
-
-            assert isinstance(self.image_size, list)
-            self.image_size.sort()  # e.g., 160 -> 224
-            MyRandomResizedCrop.IMAGE_SIZE_LIST = self.image_size.copy()
-            MyRandomResizedCrop.ACTIVE_SIZE = max(self.image_size)
-
-            for img_size in self.image_size:
-                self._valid_transform_dict[img_size] = self.build_valid_transform(
-                    img_size
-                )
-            self.active_img_size = max(self.image_size)  # active resolution for test
-            valid_transforms = self._valid_transform_dict[self.active_img_size]
-            train_loader_class = MyDataLoader  # randomly sample image size
+            # from ofa.utils.my_dataloader import MyDataLoader
+            #
+            # assert isinstance(self.image_size, list)
+            # self.image_size.sort()  # e.g., 160 -> 224
+            # MyRandomResizedCrop.IMAGE_SIZE_LIST = self.image_size.copy()
+            # MyRandomResizedCrop.ACTIVE_SIZE = max(self.image_size)
+            #
+            # for img_size in self.image_size:
+            #     self._valid_transform_dict[img_size] = self.build_valid_transform(
+            #         img_size
+            #     )
+            # self.active_img_size = max(self.image_size)  # active resolution for test
+            # valid_transforms = self._valid_transform_dict[self.active_img_size]
+            # train_loader_class = MyDataLoader  # randomly sample image size
+            pass
         else:
             self.active_img_size = self.image_size
             valid_transforms = self.build_valid_transform()
@@ -186,49 +189,50 @@ class Cifar10DataProvider(DataProvider):
     @property
     def normalize(self):
         return transforms.Normalize(
-            mean=[0.4914, 0.4822, 0.4465], std=[0.247, 0.243, 0.261]
+            mean=[0.4914, 0.4822, 0.4465], std=[0.2023, 0.1994, 0.2010]
         )
 
     def build_train_transform(self, image_size=None, print_log=True):
-        if image_size is None:
-            image_size = self.image_size
-        if print_log:
-            print(
-                'Color jitter: %s, resize_scale: %s, img_size: %s'
-                % (self.distort_color, self.resize_scale, image_size)
-            )
-
-        if isinstance(image_size, list):
-            resize_transform_class = MyRandomResizedCrop
-            print(
-                'Use MyRandomResizedCrop: %s, \t %s'
-                % MyRandomResizedCrop.get_candidate_image_size(),
-                'sync=%s, continuous=%s'
-                % (
-                    MyRandomResizedCrop.SYNC_DISTRIBUTED,
-                    MyRandomResizedCrop.CONTINUOUS,
-                ),
-            )
-        else:
-            resize_transform_class = transforms.RandomResizedCrop
+        # if image_size is None:
+        #     image_size = self.image_size
+        # if print_log:
+        #     print(
+        #         'Color jitter: %s, resize_scale: %s, img_size: %s'
+        #         % (self.distort_color, self.resize_scale, image_size)
+        #     )
+        #
+        # if isinstance(image_size, list):
+        #     resize_transform_class = MyRandomResizedCrop
+        #     print(
+        #         'Use MyRandomResizedCrop: %s, \t %s'
+        #         % MyRandomResizedCrop.get_candidate_image_size(),
+        #         'sync=%s, continuous=%s'
+        #         % (
+        #             MyRandomResizedCrop.SYNC_DISTRIBUTED,
+        #             MyRandomResizedCrop.CONTINUOUS,
+        #         ),
+        #     )
+        # else:
+        #     resize_transform_class = transforms.RandomResizedCrop
 
         # random_resize_crop -> random_horizontal_flip
         train_transforms = [
+            transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
         ]
 
-        # color augmentation (optional)
-        color_transform = None
-        if self.distort_color == 'torch':
-            color_transform = transforms.ColorJitter(
-                brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1
-            )
-        elif self.distort_color == 'tf':
-            color_transform = transforms.ColorJitter(
-                brightness=32.0 / 255.0, saturation=0.5
-            )
-        if color_transform is not None:
-            train_transforms.append(color_transform)
+        # # color augmentation (optional)
+        # color_transform = None
+        # if self.distort_color == 'torch':
+        #     color_transform = transforms.ColorJitter(
+        #         brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1
+        #     )
+        # elif self.distort_color == 'tf':
+        #     color_transform = transforms.ColorJitter(
+        #         brightness=32.0 / 255.0, saturation=0.5
+        #     )
+        # if color_transform is not None:
+        #     train_transforms.append(color_transform)
 
         train_transforms += [
             transforms.ToTensor(),
@@ -243,10 +247,7 @@ class Cifar10DataProvider(DataProvider):
             image_size = self.active_img_size
         return transforms.Compose(
             [
-                transforms.Resize(
-                    int(math.ceil(image_size / 0.875)), interpolation=Image.BICUBIC
-                ),
-                transforms.CenterCrop(image_size),
+                transforms.RandomCrop(image_size, padding=4),
                 transforms.ToTensor(),
                 self.normalize,
             ]
