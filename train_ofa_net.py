@@ -42,15 +42,16 @@ parser.add_argument(
 parser.add_argument('--pretrained', type=bool, default=False)
 
 parser.add_argument(
-    "--task",
+    '--task',
     type=str,
-    default="depth",
+    default='depth',
     choices=[
-        "supernet",
-        "baseline",
-        "kernel",
-        "depth",
-        "expand",
+        'supernet',
+        'baseline',
+        'kernel',
+        'depth',
+        'expand',
+        'width',
     ],
 )
 parser.add_argument("--phase", type=int, default=1, choices=[1, 2])
@@ -93,9 +94,15 @@ elif args.task == 'kernel':
     args.base_lr = 3e-2
     args.warmup_epochs = 5
     args.warmup_lr = -1
-    args.ks_list = "3,5,7"
-    args.expand_list = "6"
-    args.depth_list = "4"
+    if args.net == 'MobileNetV3':
+        args.ks_list = "3,5,7"
+        args.expand_list = "6"
+        args.depth_list = "4"
+    elif args.net == 'ResNet50':  # TODO this case differentiation has to be done in all tasks/phases
+        args.ks_list = '3'
+        args.width_mult_list = "1.0"
+        args.expand_list = "0.35"
+        args.depth_list = "2"
 elif args.task == "depth":
     args.dynamic_batch_size = 2
     if args.phase == 1:
@@ -105,9 +112,10 @@ elif args.task == "depth":
         args.base_lr = 2.5e-3
         args.warmup_epochs = 0
         args.warmup_lr = -1
-        args.ks_list = "3,5,7"
-        args.expand_list = "6"
-        args.depth_list = "3,4"
+        args.ks_list = "3"
+        args.width_mult_list = "1.0"
+        args.expand_list = "0.35"
+        args.depth_list = "1,2"
     else:
         args.source_path = 'exp/kernel_2_kernel_depth/phase1'
         args.target_path = 'exp/kernel_2_kernel_depth/phase2'
@@ -115,9 +123,10 @@ elif args.task == "depth":
         args.base_lr = 7.5e-3
         args.warmup_epochs = 5
         args.warmup_lr = -1
-        args.ks_list = "3,5,7"
-        args.expand_list = "6"
-        args.depth_list = "2,3,4"
+        args.ks_list = "3"
+        args.width_mult_list = "1.0"
+        args.expand_list = "0.35"
+        args.depth_list = "0,1,2"
 elif args.task == "expand":
     args.dynamic_batch_size = 4
     if args.phase == 1:
@@ -127,9 +136,10 @@ elif args.task == "expand":
         args.base_lr = 2.5e-3
         args.warmup_epochs = 0
         args.warmup_lr = -1
-        args.ks_list = "3,5,7"
-        args.expand_list = "4,6"
-        args.depth_list = "2,3,4"
+        args.ks_list = "3"
+        args.width_mult_list = "1.0"
+        args.expand_list = "0.25,0.35"
+        args.depth_list = "0,1,2"
     else:
         args.source_path = 'exp/kernel_depth_2_kernel_depth_width/phase1'
         args.target_path = 'exp/kernel_depth_2_kernel_depth_width/phase2'
@@ -137,9 +147,35 @@ elif args.task == "expand":
         args.base_lr = 7.5e-3
         args.warmup_epochs = 5
         args.warmup_lr = -1
-        args.ks_list = "3,5,7"
-        args.expand_list = "3,4,6"
-        args.depth_list = "2,3,4"
+        args.ks_list = "3"
+        args.width_mult_list = "1.0"
+        args.expand_list = "0.2,0.25,0.35"
+        args.depth_list = "0,1,2"
+elif args.task == 'width':
+    args.dynamic_batch_size = 4
+    if args.phase == 1:
+        args.source_path = 'exp/kernel_depth_2_kernel_depth_width/phase2'
+        args.target_path = 'exp/kernel_depth_width_2_kernel_depth_width_expand/phase1'
+        args.n_epochs = 25
+        args.base_lr = 2.5e-3
+        args.warmup_epochs = 0
+        args.warmup_lr = -1
+        args.ks_list = "3"
+        args.width_mult_list = "0.8,1.0"
+        args.expand_list = "0.2,0.25,0.35"
+        args.depth_list = "0,1,2"
+    else:
+        args.source_path = 'exp/kernel_depth_width_2_kernel_depth_width_expand/phase1' # TODO expand and width is swapped
+        args.target_path = 'exp/kernel_depth_width_2_kernel_depth_width_expand/phase2'
+        args.n_epochs = 120
+        args.base_lr = 7.5e-3
+        args.warmup_epochs = 5
+        args.warmup_lr = -1
+        args.ks_list = "3"
+        args.width_mult_list = "0.65,0.8,1.0"
+        args.expand_list = "0.2,0.25,0.35"
+        args.depth_list = "0,1,2"
+
 else:
     raise NotImplementedError
 
@@ -197,7 +233,6 @@ args.bn_momentum = 0.1
 args.bn_eps = 1e-5
 args.base_stage_width = "proxyless"
 
-args.width_mult_list = "1.0"
 args.independent_distributed_sampling = False
 
 args.kd_type = "ce"
@@ -211,7 +246,6 @@ if args.task == 'supernet' or 'baseline':
 else:
     args.dy_conv_scaling_mode = 1
     args.kd_ratio = 1.0
-
 
 if __name__ == "__main__":
     os.makedirs(args.target_path, exist_ok=True)
@@ -321,9 +355,15 @@ if __name__ == "__main__":
         args.width_mult_list = [
             float(width_mult) for width_mult in args.width_mult_list.split(",")
         ]
-        args.ks_list = [int(ks) for ks in args.ks_list.split(",")]
-        args.expand_list = [int(e) for e in args.expand_list.split(",")]
-        args.depth_list = [int(d) for d in args.depth_list.split(",")]
+        args.ks_list = [
+            int(ks) for ks in args.ks_list.split(",")
+        ]
+        args.expand_list = [
+            float(expand_mult) for expand_mult in args.expand_list.split(",")
+        ]
+        args.depth_list = [
+            int(d) for d in args.depth_list.split(",")
+        ]
 
         args.width_mult_list = (
             args.width_mult_list[0]
@@ -430,8 +470,10 @@ if __name__ == "__main__":
             if isinstance(args.image_size, int)
             else sorted({160, 224}),
             "ks_list": sorted({min(args.ks_list), max(args.ks_list)}),
-            "expand_ratio_list": sorted({min(args.expand_list), max(args.expand_list)}),
             "depth_list": sorted({min(net.depth_list), max(net.depth_list)}),
+            "expand_ratio_list": sorted({min(args.expand_list), max(args.expand_list)}),
+            'width_mult_list' : sorted({min(net.width_mult_list), max(net.width_mult_list)}),
+
         }
         if args.task == "kernel":
             validate_func_dict["ks_list"] = sorted(args.ks_list)
@@ -512,6 +554,19 @@ if __name__ == "__main__":
                 else:
                     args.ofa_checkpoint_path = os.path.join(args.source_path, 'checkpoint/model_best.pth.tar')
             train_elastic_expand(
+                train, distributed_run_manager, args, validate_func_dict
+            )
+        elif args.task == 'width':
+            from ofa.imagenet_classification.elastic_nn.training.progressive_shrinking import (
+                train_elastic_width_mult,
+            )  # noqa
+
+            if args.phase == 1:
+                args.ofa_checkpoint_path = os.path.join(args.source_path, 'checkpoint/model_best.pth.tar')
+            else:
+                args.ofa_checkpoint_path = os.path.join(args.source_path, 'checkpoint/model_best.pth.tar')
+
+            train_elastic_width_mult(
                 train, distributed_run_manager, args, validate_func_dict
             )
         else:
