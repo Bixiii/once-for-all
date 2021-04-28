@@ -156,7 +156,13 @@ args.print_frequency = 10
 
 args.n_worker = 8
 
-args.distort_color = "tf"
+if args.dataset == 'imagenet':
+    args.distort_color = "tf"
+elif args.dataset == 'cifar10':
+    args.distort_color = None
+else:
+    args.distort_color = None
+
 args.continuous_size = True
 args.not_sync_distributed_image_size = False
 
@@ -169,7 +175,7 @@ if args.dataset == 'imagenet':
 elif args.dataset == 'cifar10':
     if args.image_size is None:
         args.image_size = '16,24,32'
-    args.resize_scale = 0.8
+    args.resize_scale = 1
     args.base_batch_size = 128
     args.weight_decay = 4e-5
 
