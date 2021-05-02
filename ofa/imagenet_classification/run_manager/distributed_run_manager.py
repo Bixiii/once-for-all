@@ -86,8 +86,9 @@ class DistributedRunManager:
             backward_passes_per_step=backward_steps,
         )
         # Tensorboard set-up
-        # TODO import comment from main pt_Net_32x32_cifar10_bs128lr0.08_ofa_task
-        self.tensorboard_writer = SummaryWriter(comment='OFANet' + comment + '_32x32_cifar10_bs' + '128' + 'lr' + '0.08')
+        self.tensorboard_writer = SummaryWriter(comment=comment)
+
+        self.write_log(str(self.__dict__), 'debug', False)
 
     """ save path and log path """
 

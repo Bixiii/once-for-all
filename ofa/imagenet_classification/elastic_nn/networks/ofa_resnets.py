@@ -207,6 +207,7 @@ class OFAResNets(ResNets):
             'e': expand_setting,
             'w': width_mult_setting
         }
+        print('d-e-w:' + str(depth_setting) + '-' + str(expand_setting) + '-' + str(width_mult_setting))
         self.set_active_subnet(**arch_config)
         return arch_config
 

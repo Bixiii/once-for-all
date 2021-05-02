@@ -28,18 +28,17 @@ from settings import deactivate_cuda
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    "--dataset", type=str, default="imagenet", choices=["imagenet", "cifar10"]
+    '--dataset', type=str, default='imagenet', choices=['imagenet', 'cifar10', 'imagenette']
 )
 parser.add_argument(
-    '--net', type=str, default='MobileNetV3', choices=['MobileNetV3', 'ResNet18', 'ResNet50']
+    '--net', type=str, default='MobileNetV3', choices=['MobileNetV3', 'ResNet50', 'ResNet18']  # TODO ResNet18 is not workin properly, also MobileNetV3 Baseline does not work?
 )
 parser.add_argument(
-    '--teacher_path',
-    type=str,
-    default='exp/supernet/checkpoint/model_best.pth.tar'
+    '--teacher_path', type=str, default=''
 )
-
-parser.add_argument('--pretrained', type=bool, default=False)
+parser.add_argument(
+    '--pretrained', type=bool, default=False
+)
 
 parser.add_argument(
     '--task',
@@ -54,145 +53,198 @@ parser.add_argument(
         'width',
     ],
 )
-parser.add_argument("--phase", type=int, default=1, choices=[1, 2])
-parser.add_argument("--resume", action="store_true")
+parser.add_argument(
+    '--phase', type=int, default=1, choices=[1, 2]
+)
+parser.add_argument(
+    '--resume', action='store_true'
+)
+
+parser.add_argument(
+    '--experiment_id', type=str, default=''
+)
 
 args = parser.parse_args()
 
+args.experiment_folder = 'exp_OFA' + args.net + '_' + args.dataset + '_id' + args.experiment_id + '/'
+os.mkdir(args.experiment_folder)
+
+if not args.teacher_path:
+    args.teacher_path = args.experiment_folder + '/supernet/checkpoint/model_best.pth.tar'
+
 args.image_size = None
+
 if args.task == 'supernet':
-    args.target_path = 'exp/supernet'
+    args.target_path = args.experiment_folder + 'supernet'
     args.dynamic_batch_size = 1
-    if args.dataset == 'imagenet':
+    if args.dataset == 'imagenet' or 'imagenette':
         args.image_size = '224'
-        args.base_lr = 0.08
     elif args.dataset == 'cifar10':
         args.image_size = '32'
-        args.base_lr = 0.08
+    args.base_lr = 0.08
     args.n_epochs = 500
     args.warmup_epochs = 0
     args.warmup_lr = -1
     args.phase = 0
+
 elif args.task == 'baseline':
-    args.target_path = "exp/baseline"
+    args.target_path = args.experiment_folder + 'baseline'
     args.dynamic_batch_size = 1
-    if args.dataset == 'imagenet':
+    if args.dataset == 'imagenet' or 'imagenette':
         args.image_size = '224'
-        args.base_lr = 0.08
     elif args.dataset == 'cifar10':
         args.image_size = '32'
-        args.base_lr = 0.08
+    args.base_lr = 0.08
     args.n_epochs = 500
     args.warmup_epochs = 0
     args.warmup_lr = -1
     args.phase = 0
+
 elif args.task == 'kernel':
-    args.source_path = 'exp/baseline'
-    args.target_path = 'exp/baseline_2_kernel'
+    args.source_path = args.experiment_folder + 'baseline'
+    args.target_path = args.experiment_folder + 'baseline_2_kernel'
     args.dynamic_batch_size = 1
     args.n_epochs = 120
     args.base_lr = 3e-2
     args.warmup_epochs = 5
     args.warmup_lr = -1
     if args.net == 'MobileNetV3':
-        args.ks_list = "3,5,7"
-        args.expand_list = "6"
-        args.depth_list = "4"
-    elif args.net == 'ResNet50':  # TODO this case differentiation has to be done in all tasks/phases
+        args.ks_list = '3,5,7'
+        args.width_mult_list = '1.0'
+        args.expand_list = '6'
+        args.depth_list = '4'
+    elif args.net == 'ResNet50':
         args.ks_list = '3'
-        args.width_mult_list = "1.0"
-        args.expand_list = "0.35"
-        args.depth_list = "2"
-elif args.task == "depth":
+        args.width_mult_list = '1.0'
+        args.expand_list = '0.35'
+        args.depth_list = '2'
+
+elif args.task == 'depth':
     args.dynamic_batch_size = 2
     if args.phase == 1:
-        args.source_path = 'exp/baseline_2_kernel'
-        args.target_path = 'exp/kernel_2_kernel_depth/phase1'
+        args.source_path = args.experiment_folder + 'baseline_2_kernel'
+        args.target_path = args.experiment_folder + 'kernel_2_kernel_depth/phase1'
         args.n_epochs = 25
         args.base_lr = 2.5e-3
         args.warmup_epochs = 0
         args.warmup_lr = -1
-        args.ks_list = "3"
-        args.width_mult_list = "1.0"
-        args.expand_list = "0.35"
-        args.depth_list = "1,2"
+        if args.net == 'MobileNetV3':
+            args.ks_list = '3,5,7'
+            args.width_mult_list = '1.0'
+            args.expand_list = '6'
+            args.depth_list = '3,4'
+        elif args.net == 'ResNet50':
+            args.ks_list = '3'
+            args.width_mult_list = '1.0'
+            args.expand_list = '0.35'
+            args.depth_list = '1,2'
     else:
-        args.source_path = 'exp/kernel_2_kernel_depth/phase1'
-        args.target_path = 'exp/kernel_2_kernel_depth/phase2'
+        args.source_path = args.experiment_folder + 'kernel_2_kernel_depth/phase1'
+        args.target_path = args.experiment_folder + 'kernel_2_kernel_depth/phase2'
         args.n_epochs = 120
         args.base_lr = 7.5e-3
         args.warmup_epochs = 5
         args.warmup_lr = -1
-        args.ks_list = "3"
-        args.width_mult_list = "1.0"
-        args.expand_list = "0.35"
-        args.depth_list = "0,1,2"
-elif args.task == "expand":
+        if args.net == 'MobileNetV3':
+            args.ks_list = '3,5,7'
+            args.width_mult_list = '1.0'
+            args.expand_list = '6'
+            args.depth_list = '2,3,4'
+        elif args.net == 'ResNet50':
+            args.ks_list = '3'
+            args.width_mult_list = '1.0'
+            args.expand_list = '0.35'
+            args.depth_list = '0,1,2'
+
+elif args.task == 'expand':
     args.dynamic_batch_size = 4
     if args.phase == 1:
-        args.source_path = 'exp/kernel_2_kernel_depth/phase2'
-        args.target_path = 'exp/kernel_depth_2_kernel_depth_width/phase1'
+        args.source_path = args.experiment_folder + 'kernel_2_kernel_depth/phase2'
+        args.target_path = args.experiment_folder + 'kernel_depth_2_kernel_depth_expand/phase1'
         args.n_epochs = 25
         args.base_lr = 2.5e-3
         args.warmup_epochs = 0
         args.warmup_lr = -1
-        args.ks_list = "3"
-        args.width_mult_list = "1.0"
-        args.expand_list = "0.25,0.35"
-        args.depth_list = "0,1,2"
+        if args.net == 'MobileNetV3':
+            args.ks_list = '3,5,7'
+            args.width_mult_list = '1.0'
+            args.expand_list = '4,6'
+            args.depth_list = '2,3,4'
+        elif args.net == 'ResNet50':
+            args.ks_list = '3'
+            args.width_mult_list = '1.0'
+            args.expand_list = '0.25,0.35'
+            args.depth_list = '0,1,2'
     else:
-        args.source_path = 'exp/kernel_depth_2_kernel_depth_width/phase1'
-        args.target_path = 'exp/kernel_depth_2_kernel_depth_width/phase2'
+        args.source_path = args.experiment_folder + 'kernel_depth_2_kernel_depth_expand/phase1'
+        args.target_path = args.experiment_folder + 'kernel_depth_2_kernel_depth_expand/phase2'
         args.n_epochs = 120
         args.base_lr = 7.5e-3
         args.warmup_epochs = 5
         args.warmup_lr = -1
-        args.ks_list = "3"
-        args.width_mult_list = "1.0"
-        args.expand_list = "0.2,0.25,0.35"
-        args.depth_list = "0,1,2"
+        if args.net == 'MobileNetV3':
+            args.ks_list = '3,5,7'
+            args.width_mult_list = '1.0'
+            args.expand_list = '3,4,6'
+            args.depth_list = '2,3,4'
+        elif args.net == 'ResNet50':
+            args.ks_list = '3'
+            args.width_mult_list = '1.0'
+            args.expand_list = '0.2,0.25,0.35'
+            args.depth_list = '0,1,2'
+
 elif args.task == 'width':
     args.dynamic_batch_size = 4
     if args.phase == 1:
-        args.source_path = 'exp/kernel_depth_2_kernel_depth_width/phase2'
-        args.target_path = 'exp/kernel_depth_width_2_kernel_depth_width_expand/phase1'
+        args.source_path = args.experiment_folder + 'kernel_depth_2_kernel_depth_expand/phase2'
+        args.target_path = args.experiment_folder + 'kernel_depth_expand_2_kernel_depth_expand_width/phase1'
         args.n_epochs = 25
         args.base_lr = 2.5e-3
         args.warmup_epochs = 0
         args.warmup_lr = -1
-        args.ks_list = "3"
-        args.width_mult_list = "0.8,1.0"
-        args.expand_list = "0.2,0.25,0.35"
-        args.depth_list = "0,1,2"
+        if args.net == 'MobileNetV3':
+            args.ks_list = '3,5,7'
+            args.width_mult_list = '0.8,1.0'
+            args.expand_list = '3,4,6'
+            args.depth_list = '2,3,4'
+        elif args.net == 'ResNet50':
+            args.ks_list = '3'
+            args.width_mult_list = '0.8,1.0'
+            args.expand_list = '0.2,0.25,0.35'
+            args.depth_list = '0,1,2'
     else:
-        args.source_path = 'exp/kernel_depth_width_2_kernel_depth_width_expand/phase1' # TODO expand and width is swapped
-        args.target_path = 'exp/kernel_depth_width_2_kernel_depth_width_expand/phase2'
+        args.source_path = args.experiment_folder + 'kernel_depth_expand_2_kernel_depth_expand_width/phase1'
+        args.target_path = args.experiment_folder + 'kernel_depth_expand_2_kernel_depth_expand_width/phase2'
         args.n_epochs = 120
         args.base_lr = 7.5e-3
         args.warmup_epochs = 5
         args.warmup_lr = -1
-        args.ks_list = "3"
-        args.width_mult_list = "0.65,0.8,1.0"
-        args.expand_list = "0.2,0.25,0.35"
-        args.depth_list = "0,1,2"
+        if args.net == 'MobileNetV3':
+            args.ks_list = '3,5,7'
+            args.width_mult_list = '0.65,0.8,1.0'
+            args.expand_list = '3,4,6'
+            args.depth_list = '2,3,4'
+        elif args.net == 'ResNet50':
+            args.ks_list = '3'
+            args.width_mult_list = '0.65,0.8,1.0'
+            args.expand_list = '0.2,0.25,0.35'
+            args.depth_list = '0,1,2'
 
 else:
     raise NotImplementedError
 
-comment = args.task + str(args.phase)
-
 args.manual_seed = 0
 
-args.lr_schedule_type = "cosine"
+args.lr_schedule_type = 'cosine'
 
-args.valid_size = 10000
+args.valid_size = 1000
 
-args.opt_type = "sgd"
+args.opt_type = 'sgd'
 args.momentum = 0.9
-if args.dataset == 'imagenet':
+if args.dataset == 'imagenet' or 'imagenette':
     args.no_nesterov = False
     args.label_smoothing = 0.1
-    args.no_decay_keys = "bn#bias"
+    args.no_decay_keys = 'bn#bias'
 elif args.dataset == 'cifar10':
     args.no_nesterov = True
     args.label_smoothing = 0.01
@@ -200,15 +252,15 @@ elif args.dataset == 'cifar10':
 
 args.fp16_allreduce = False
 
-args.model_init = "he_fout"
+args.model_init = 'he_fout'
 args.validation_frequency = 1
 args.print_frequency = 10
 
-args.n_worker = 0
+args.n_worker = 8
 
 if args.dataset == 'imagenet':
-    args.distort_color = "tf"
-elif args.dataset == 'cifar10':
+    args.distort_color = 'tf'
+elif args.dataset == 'cifar10' or 'imagenette':
     args.distort_color = None
 else:
     args.distort_color = None
@@ -216,26 +268,29 @@ else:
 args.continuous_size = True
 args.not_sync_distributed_image_size = False
 
-if args.dataset == 'imagenet':
+if args.dataset == 'imagenet' or 'imagenette':
     if args.image_size is None:
         args.image_size = '128,160,192,224'
-    args.resize_scale = 0.08
+    args.resize_scale = 0.8  # TODO imagenet was 0.08, I will now try 0.8
     args.base_batch_size = 64
     args.weight_decay = 3e-5
 elif args.dataset == 'cifar10':
     if args.image_size is None:
-        args.image_size = '32'  # TODO define different resolutions
+        args.image_size = '32'
     args.resize_scale = 1
     args.base_batch_size = 128
     args.weight_decay = 5e-4
 
+# comment describing current experiment
+comment = '_pt_' + 'OFA' + args.net + '-' + args.task + str(args.phase) + '_' + str(args.image_size) + 'x' + str(args.image_size) + '_' + args.dataset + '_bs' + str(args.base_batch_size) + 'lr' + str(args.base_lr)
+
 args.bn_momentum = 0.1
 args.bn_eps = 1e-5
-args.base_stage_width = "proxyless"
+args.base_stage_width = 'proxyless'
 
 args.independent_distributed_sampling = False
 
-args.kd_type = "ce"
+args.kd_type = 'ce'
 
 args.dropout = 0.1
 # for different params in supernet task
@@ -250,7 +305,7 @@ else:
 if __name__ == "__main__":
     os.makedirs(args.target_path, exist_ok=True)
 
-    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '1,0'
     # Initialize Horovod
     hvd.init()
     # Pin GPU to be used to process local rank (one GPU per process)
@@ -263,7 +318,7 @@ if __name__ == "__main__":
             model_dir=".torch/ofa_checkpoints/%d" % hvd.rank(),
         )
     elif not args.teacher_path:
-        args.teacher_path = 'exp/supernet/checkpoint/model_best.pth.tar'
+        args.teacher_path = args.experiment_folder + 'supernet/checkpoint/model_best.pth.tar'
 
     num_gpus = hvd.size()
 
@@ -358,9 +413,14 @@ if __name__ == "__main__":
         args.ks_list = [
             int(ks) for ks in args.ks_list.split(",")
         ]
-        args.expand_list = [
-            float(expand_mult) for expand_mult in args.expand_list.split(",")
-        ]
+        if args.net == 'MobileNetV3':
+            args.expand_list = [
+                int(expand_mult) for expand_mult in args.expand_list.split(",")
+            ]
+        elif args.net == 'ResNet50':
+            args.expand_list = [
+                float(expand_mult) for expand_mult in args.expand_list.split(",")
+            ]
         args.depth_list = [
             int(d) for d in args.depth_list.split(",")
         ]
@@ -370,6 +430,7 @@ if __name__ == "__main__":
             if len(args.width_mult_list) == 1
             else args.width_mult_list
         )
+
         if args.net == 'ResNet18':
             net = OFASmallResNets(
                 n_classes=run_config.data_provider.n_classes,
@@ -466,17 +527,17 @@ if __name__ == "__main__":
         )
 
         validate_func_dict = {
-            "image_size_list": {224} if args.dataset == 'imagenet' else {32}
+            'image_size_list': {224} if args.dataset == 'imagenet' else {32}
             if isinstance(args.image_size, int)
             else sorted({160, 224}),
-            "ks_list": sorted({min(args.ks_list), max(args.ks_list)}),
-            "depth_list": sorted({min(net.depth_list), max(net.depth_list)}),
-            "expand_ratio_list": sorted({min(args.expand_list), max(args.expand_list)}),
-            'width_mult_list' : sorted({min(net.width_mult_list), max(net.width_mult_list)}),
+            'ks_list': sorted({min(args.ks_list), max(args.ks_list)}),
+            'depth_list': sorted({min(net.depth_list), max(net.depth_list)}),
+            'expand_ratio_list': sorted({min(args.expand_list), max(args.expand_list)}),
+            'width_mult_list': sorted({min(net.width_mult_list), max(net.width_mult_list)}),
 
         }
-        if args.task == "kernel":
-            validate_func_dict["ks_list"] = sorted(args.ks_list)
+        if args.task == 'kernel':
+            validate_func_dict['ks_list'] = sorted(args.ks_list)
             if distributed_run_manager.start_epoch == 0:
                 if args.pretrained:
                     args.ofa_checkpoint_path = download_url(
@@ -496,7 +557,7 @@ if __name__ == "__main__":
                     % validate(
                         distributed_run_manager, is_test=True, **validate_func_dict
                     ),
-                    "valid",
+                    'valid',
                 )
             else:
                 assert args.resume
@@ -507,7 +568,7 @@ if __name__ == "__main__":
                     _run_manager, epoch, is_test, **validate_func_dict
                 ),
             )
-        elif args.task == "depth":
+        elif args.task == 'depth':
             from ofa.imagenet_classification.elastic_nn.training.progressive_shrinking import (
                 train_elastic_depth,
             )  # noqa
@@ -532,7 +593,7 @@ if __name__ == "__main__":
             train_elastic_depth(
                 train, distributed_run_manager, args, validate_func_dict
             )
-        elif args.task == "expand":
+        elif args.task == 'expand':
             from ofa.imagenet_classification.elastic_nn.training.progressive_shrinking import (
                 train_elastic_expand,
             )  # noqa

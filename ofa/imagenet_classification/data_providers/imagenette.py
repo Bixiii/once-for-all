@@ -5,7 +5,6 @@
 import warnings
 import os
 import math
-from PIL import Image
 import numpy as np
 import torch.utils.data
 import torchvision.transforms as transforms
@@ -14,50 +13,46 @@ import torchvision.datasets as datasets
 from .base_provider import DataProvider
 from ofa.utils.my_dataloader import MyRandomResizedCrop, MyDistributedSampler
 
+__all__ = ['ImagenetteDataProvider']
 
-class Cifar10DataProvider(DataProvider):
-    DEFAULT_PATH = './dataset/cifar10'
+
+class ImagenetteDataProvider(DataProvider):
+    DEFAULT_PATH = './dataset/imagenette2'
 
     def __init__(
         self,
         save_path=None,
-        train_batch_size=128,
-        test_batch_size=128,
-        n_worker=0,
-        image_size=32,
+        train_batch_size=256,
+        test_batch_size=512,
         valid_size=None,
+        n_worker=0,
+        resize_scale=0.08,
+        distort_color=None,
+        image_size=224,
         num_replicas=None,
         rank=None,
-        resize_scale=1,  # unused data augmentation but here for compatibility
-        distort_color=None,  # unused data augmentation but here for compatibility
     ):
 
         warnings.filterwarnings('ignore')
         self._save_path = save_path
 
         self.image_size = image_size  # int or list of int
-        # self.distort_color = 'None' if distort_color is None else distort_color
-        # self.resize_scale = resize_scale
-        self.distort_color = 'None'
-        self.resize_scale = 1
+        self.distort_color = 'None' if distort_color is None else distort_color
+        self.resize_scale = resize_scale
 
         self._valid_transform_dict = {}
         if not isinstance(self.image_size, int):
-            # from ofa.utils.my_dataloader import MyDataLoader
-            #
-            # assert isinstance(self.image_size, list)
-            # self.image_size.sort()  # e.g., 160 -> 224
-            # MyRandomResizedCrop.IMAGE_SIZE_LIST = self.image_size.copy()
-            # MyRandomResizedCrop.ACTIVE_SIZE = max(self.image_size)
-            #
-            # for img_size in self.image_size:
-            #     self._valid_transform_dict[img_size] = self.build_valid_transform(
-            #         img_size
-            #     )
-            # self.active_img_size = max(self.image_size)  # active resolution for test
-            # valid_transforms = self._valid_transform_dict[self.active_img_size]
-            # train_loader_class = MyDataLoader  # randomly sample image size
-            pass
+            from ofa.utils.my_dataloader import MyDataLoader
+            assert isinstance(self.image_size, list)
+            self.image_size.sort()  # e.g., 160 -> 224
+            MyRandomResizedCrop.IMAGE_SIZE_LIST = self.image_size.copy()
+            MyRandomResizedCrop.ACTIVE_SIZE = max(self.image_size)
+
+            for img_size in self.image_size:
+                self._valid_transform_dict[img_size] = self.build_valid_transform(img_size)
+            self.active_img_size = max(self.image_size)  # active resolution for test
+            valid_transforms = self._valid_transform_dict[self.active_img_size]
+            train_loader_class = MyDataLoader  # randomly sample image size for each batch of training image
         else:
             self.active_img_size = self.image_size
             valid_transforms = self.build_valid_transform()
@@ -152,7 +147,7 @@ class Cifar10DataProvider(DataProvider):
 
     @staticmethod
     def name():
-        return 'cifar10'
+        return 'imagenette'
 
     @property
     def data_shape(self):
@@ -167,7 +162,7 @@ class Cifar10DataProvider(DataProvider):
         if self._save_path is None:
             self._save_path = self.DEFAULT_PATH
             if not os.path.exists(self._save_path):
-                os.makedirs(self._save_path)
+                raise FileNotFoundError
         return self._save_path
 
     @property
@@ -175,64 +170,66 @@ class Cifar10DataProvider(DataProvider):
         raise ValueError('unable to download %s' % self.name())
 
     def train_dataset(self, _transforms):
-        # Assume we have data on disc
-        return datasets.CIFAR10(
-            self.save_path, train=True, transform=_transforms, download=True
-        )
+        return datasets.ImageFolder(self.train_path, _transforms)
 
     def test_dataset(self, _transforms):
-        # Assume we have data on disc
-        return datasets.CIFAR10(
-            self.save_path, train=False, transform=_transforms, download=True
-        )
+        return datasets.ImageFolder(self.valid_path, _transforms)
+
+    @property
+    def train_path(self):
+        return os.path.join(self.save_path, 'train')
+
+    @property
+    def valid_path(self):
+        return os.path.join(self.save_path, 'val')
 
     @property
     def normalize(self):
         return transforms.Normalize(
-            mean=[0.4914, 0.4822, 0.4465], std=[0.2023, 0.1994, 0.2010]
+            mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
         )
 
     def build_train_transform(self, image_size=None, print_log=True):
-        # if image_size is None:
-        #     image_size = self.image_size
-        # if print_log:
-        #     print(
-        #         'Color jitter: %s, resize_scale: %s, img_size: %s'
-        #         % (self.distort_color, self.resize_scale, image_size)
-        #     )
-        #
-        # if isinstance(image_size, list):
-        #     resize_transform_class = MyRandomResizedCrop
-        #     print(
-        #         'Use MyRandomResizedCrop: %s, \t %s'
-        #         % MyRandomResizedCrop.get_candidate_image_size(),
-        #         'sync=%s, continuous=%s'
-        #         % (
-        #             MyRandomResizedCrop.SYNC_DISTRIBUTED,
-        #             MyRandomResizedCrop.CONTINUOUS,
-        #         ),
-        #     )
-        # else:
-        #     resize_transform_class = transforms.RandomResizedCrop
+        if image_size is None:
+            image_size = self.image_size
+        if print_log:
+            print(
+                'Color jitter: %s, resize_scale: %s, img_size: %s'
+                % (self.distort_color, self.resize_scale, image_size)
+            )
+
+        if isinstance(image_size, list):
+            resize_transform_class = MyRandomResizedCrop
+            print(
+                'Use MyRandomResizedCrop: %s, \t %s'
+                % MyRandomResizedCrop.get_candidate_image_size(),
+                'sync=%s, continuous=%s'
+                % (
+                    MyRandomResizedCrop.SYNC_DISTRIBUTED,
+                    MyRandomResizedCrop.CONTINUOUS,
+                ),
+            )
+        else:
+            resize_transform_class = transforms.RandomResizedCrop
 
         # random_resize_crop -> random_horizontal_flip
         train_transforms = [
-            transforms.RandomCrop(32, padding=4),
+            resize_transform_class(image_size, scale=(self.resize_scale, 1.0)),
             transforms.RandomHorizontalFlip(),
         ]
 
-        # # color augmentation (optional)
-        # color_transform = None
-        # if self.distort_color == 'torch':
-        #     color_transform = transforms.ColorJitter(
-        #         brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1
-        #     )
-        # elif self.distort_color == 'tf':
-        #     color_transform = transforms.ColorJitter(
-        #         brightness=32.0 / 255.0, saturation=0.5
-        #     )
-        # if color_transform is not None:
-        #     train_transforms.append(color_transform)
+        # color augmentation (optional)
+        color_transform = None
+        if self.distort_color == 'torch':
+            color_transform = transforms.ColorJitter(
+                brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1
+            )
+        elif self.distort_color == 'tf':
+            color_transform = transforms.ColorJitter(
+                brightness=32. / 255., saturation=0.5
+            )
+        if color_transform is not None:
+            train_transforms.append(color_transform)
 
         train_transforms += [
             transforms.ToTensor(),
@@ -247,7 +244,8 @@ class Cifar10DataProvider(DataProvider):
             image_size = self.active_img_size
         return transforms.Compose(
             [
-                # transforms.RandomCrop(image_size, padding=4),
+                transforms.Resize(int(math.ceil(image_size / 0.875))),
+                transforms.CenterCrop(image_size),
                 transforms.ToTensor(),
                 self.normalize,
             ]
@@ -301,9 +299,9 @@ class Cifar10DataProvider(DataProvider):
                 num_workers=num_worker,
                 pin_memory=True,
             )
-            self.__dict__['sub_train_%d' % self.active_img_size] = []
+            self.__dict__["sub_train_%d" % self.active_img_size] = []
             for images, labels in sub_data_loader:
-                self.__dict__['sub_train_%d' % self.active_img_size].append(
+                self.__dict__["sub_train_%d" % self.active_img_size].append(
                     (images, labels)
                 )
-        return self.__dict__['sub_train_%d' % self.active_img_size]
+        return self.__dict__["sub_train_%d" % self.active_img_size]
