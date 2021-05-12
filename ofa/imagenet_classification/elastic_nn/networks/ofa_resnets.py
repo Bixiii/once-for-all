@@ -39,7 +39,7 @@ class OFAResNets(ResNets):
         stride_list = [1, 2, 2, 2]
 
         # build input stem
-        input_stem = [
+        input_stem = [  # TODO this is not how ResNet is defined?
             DynamicConvLayer(val2list(3), mid_input_channel, 3, stride=2, use_bn=True, act_func='relu'),
             ResidualBlock(
                 DynamicConvLayer(mid_input_channel, mid_input_channel, 3, stride=1, use_bn=True, act_func='relu'),
@@ -157,9 +157,9 @@ class OFAResNets(ResNets):
         self.set_active_subnet(d=max(self.depth_list), e=max(self.expand_ratio_list), w=len(self.width_mult_list) - 1)
 
     def set_active_subnet(self, d=None, e=None, w=None, **kwargs):
-        depth = val2list(d, len(ResNets.BASE_DEPTH_LIST) + 1)
+        depth = val2list(d, len(ResNets.BASE_DEPTH_LIST) + 1)  # +1 for input_stem
         expand_ratio = val2list(e, len(self.blocks))
-        width_mult = val2list(w, len(ResNets.BASE_DEPTH_LIST) + 2)
+        width_mult = val2list(w, len(ResNets.BASE_DEPTH_LIST) + 2)  # +2 for both input_stem layers
 
         for block, e in zip(self.blocks, expand_ratio):
             if e is not None:
@@ -179,6 +179,12 @@ class OFAResNets(ResNets):
             if w is not None:
                 for idx in block_idx:
                     self.blocks[idx].active_out_channel = self.blocks[idx].out_channel_list[w]
+        arch_config = {
+            'd': depth,
+            'e': expand_ratio,
+            'w': width_mult
+        }
+        return arch_config
 
     def sample_active_subnet(self):
         # sample expand ratio
@@ -207,7 +213,6 @@ class OFAResNets(ResNets):
             'e': expand_setting,
             'w': width_mult_setting
         }
-        print('d-e-w:' + str(depth_setting) + '-' + str(expand_setting) + '-' + str(width_mult_setting))
         self.set_active_subnet(**arch_config)
         return arch_config
 
