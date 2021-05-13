@@ -19,8 +19,6 @@ from ofa.utils import get_net_info, cross_entropy_loss_with_soft_target, cross_e
 from ofa.utils import AverageMeter, accuracy, write_log, mix_images, mix_labels, init_models
 from ofa.utils import MyRandomResizedCrop
 
-from settings import deactivate_cuda
-
 __all__ = ['RunManager']
 
 
@@ -45,7 +43,7 @@ class RunManager:
             self.device = torch.device('cpu')
         # initialize model (default)
         if init:
-            init_models(run_config.model_init)
+            init_models(net, run_config.model_init)
 
         # net info
         net_info = get_net_info(self.net, self.run_config.data_provider.data_shape, measure_latency, True)
@@ -56,9 +54,9 @@ class RunManager:
                 fout.write(self.network.module_str + '\n')
             except Exception:
                 pass
-            fout.write('%s\n' % self.run_config.data_provider.train.dataset.transform)
-            fout.write('%s\n' % self.run_config.data_provider.test.dataset.transform)
-            fout.write('%s\n' % self.network)
+            # fout.write('%s\n' % self.run_config.data_provider.train.dataset.transform)
+            # fout.write('%s\n' % self.run_config.data_provider.test.dataset.transform)
+            # fout.write('%s\n' % self.network)
 
         # criterion
         if isinstance(self.run_config.mixup_alpha, float):
@@ -88,8 +86,7 @@ class RunManager:
                         net_params.append(param)
         self.optimizer = self.run_config.build_optimizer(net_params)
 
-        if not deactivate_cuda:
-            self.net = torch.nn.DataParallel(self.net)
+        self.net = torch.nn.DataParallel(self.net)
 
         # Tensorboard set-up
         self.tensorboard_writer = SummaryWriter(comment=comment)
@@ -218,7 +215,7 @@ class RunManager:
     def validate(self, epoch=0, is_test=False, run_str='', net=None, data_loader=None, no_logs=False, train_mode=False):
         if net is None:
             net = self.net
-        if not isinstance(net, nn.DataParallel) and not deactivate_cuda:
+        if not isinstance(net, nn.DataParallel):
             net = nn.DataParallel(net)
 
         if data_loader is None:

@@ -23,7 +23,7 @@ from ofa.imagenet_classification.run_manager.distributed_run_manager import (
 )
 from ofa.utils import MyRandomResizedCrop, download_url
 
-from settings import deactivate_cuda, use_hvd, tiny_gpu
+from settings import use_hvd, tiny_gpu
 
 if use_hvd:
     import horovod.torch as hvd
@@ -85,9 +85,10 @@ if args.task == 'supernet':
     args.dynamic_batch_size = 1
     if args.dataset == 'imagenet' or 'imagenette':
         args.image_size = '224'
+        args.base_lr = 0.04
     elif args.dataset == 'cifar10':
         args.image_size = '32'
-    args.base_lr = 0.08
+        args.base_lr = 0.08
     args.n_epochs = 300
     args.warmup_epochs = 0
     args.warmup_lr = -1
@@ -98,9 +99,10 @@ elif args.task == 'baseline':
     args.dynamic_batch_size = 1
     if args.dataset == 'imagenet' or 'imagenette':
         args.image_size = '224'
+        args.base_lr = 0.04
     elif args.dataset == 'cifar10':
         args.image_size = '32'
-    args.base_lr = 0.08
+        args.base_lr = 0.08
     args.n_epochs = 300
     args.warmup_epochs = 0
     args.warmup_lr = -1
@@ -243,12 +245,14 @@ args.manual_seed = 0
 
 args.lr_schedule_type = 'cosine'
 
-args.valid_size = 100
+# divide dataset in train and val set (int: total number, float: percentage, None: using test data for validation)
+args.valid_size = None
+# args.valid_size = 0.5
 
 args.opt_type = 'sgd'
 args.momentum = 0.9
 if args.dataset == 'imagenet' or 'imagenette':
-    args.no_nesterov = False
+    args.no_nesterov = True
     args.label_smoothing = 0.1
     args.no_decay_keys = 'bn#bias'
 elif args.dataset == 'cifar10':
@@ -285,7 +289,7 @@ elif args.dataset == 'imagenette':
         args.image_size = '128,160,192,224'
     args.resize_scale = 0.8
     args.base_batch_size = 64
-    args.weight_decay = 5e-4
+    args.weight_decay = 3e-5
 elif args.dataset == 'cifar10':
     if args.image_size is None:
         args.image_size = '32'
@@ -300,7 +304,7 @@ if tiny_gpu and (args.dataset == 'imagenet' or args.dataset == 'imagnette'):
 
 # comment describing current experiment
 comment = '_pt_' + 'OFA' + args.net + '-' + args.task + str(args.phase) + '_' + str(args.image_size) + 'x' + str(
-    args.image_size) + '_' + args.dataset + '_bs' + str(args.base_batch_size) + 'lr' + str(args.base_lr)
+    args.image_size) + '_' + args.dataset + '_bs' + str(args.base_batch_size) + 'lr' + str(args.base_lr) + str(args.experiment_id)
 
 args.bn_momentum = 0.1
 args.bn_eps = 1e-5
@@ -325,7 +329,7 @@ if __name__ == "__main__":
 
     # Initialize Horovod
     if use_hvd:
-        # os.environ['CUDA_VISIBLE_DEVICES'] = '1,0'
+        os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
         hvd.init()
         # Pin GPU to be used to process local rank (one GPU per process)
         torch.cuda.set_device(hvd.local_rank())
@@ -367,7 +371,6 @@ if __name__ == "__main__":
     args.test_batch_size = args.base_batch_size
     if use_hvd:
         run_config = DistributedImageNetRunConfig(
-            # **args.__dict__, num_replicas=num_gpus if args.dataset == 'imagenet' else None, rank=hvd.rank()
             **args.__dict__, num_replicas=num_gpus, rank=hvd.rank(), comment=comment
         )
     else:
@@ -542,7 +545,8 @@ if __name__ == "__main__":
             args.target_path,
             net,
             run_config,
-            init=False  # TODO find out what that does
+            init=True,  # does not matter, assigns some values
+            comment=comment,
         )
         run_manager.save_config()
 

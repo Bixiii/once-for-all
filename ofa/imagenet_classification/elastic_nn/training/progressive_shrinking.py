@@ -1,6 +1,7 @@
 # Once for All: Train One Network and Specialize it for Efficient Deployment
 # Han Cai, Chuang Gan, Tianzhe Wang, Zhekai Zhang, Song Han
 # International Conference on Learning Representations (ICLR), 2020.
+import os
 
 import torch.nn as nn
 import random
@@ -10,7 +11,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from ofa.utils import AverageMeter, cross_entropy_loss_with_soft_target
-from ofa.utils import DistributedMetric, list_mean, subset_mean, val2list, MyRandomResizedCrop
+from ofa.utils import DistributedMetric, list_mean, subset_mean, val2list, MyRandomResizedCrop, common_tools
 from ofa.imagenet_classification.run_manager import DistributedRunManager
 
 __all__ = [
@@ -132,6 +133,7 @@ def train_one_epoch(run_manager, args, epoch, warmup_epochs=0, warmup_lr=0):
                 subnet_str += '%d: ' % _ + ','.join(['%s_%s' % (
                     key, '%.1f' % subset_mean(val, 0) if isinstance(val, list) else val
                 ) for key, val in subnet_settings.items()]) + ' || '
+                common_tools.write_log(os.path.join('.', 'logs'), subnet_str, 'test', should_print=False)  # TODO test
 
                 output = run_manager.net(images)
                 if args.kd_ratio == 0:
