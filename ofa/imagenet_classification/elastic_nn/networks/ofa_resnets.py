@@ -38,8 +38,8 @@ class OFAResNets(ResNets):
         n_block_list = [base_depth + max(self.depth_list) for base_depth in ResNets.BASE_DEPTH_LIST]
         stride_list = [1, 2, 2, 2]
 
-        # build input stem
-        input_stem = [  # TODO this is not how ResNet is defined?
+        # build input stem (same input_stem as in ResNet50D used)
+        input_stem = [
             DynamicConvLayer(val2list(3), mid_input_channel, 3, stride=2, use_bn=True, act_func='relu'),
             ResidualBlock(
                 DynamicConvLayer(mid_input_channel, mid_input_channel, 3, stride=1, use_bn=True, act_func='relu'),

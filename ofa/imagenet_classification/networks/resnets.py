@@ -100,7 +100,7 @@ class ResNets(MyNetwork):
 class ResNet50(ResNets):
 
     def __init__(self, n_classes=1000, width_mult=1.0, bn_param=(0.1, 1e-5), dropout_rate=0,
-                 expand_ratio=None, depth_param=None):
+                 expand_ratio=None, depth_param=None, dataset=None):
 
         expand_ratio = 0.25 if expand_ratio is None else expand_ratio
 
@@ -116,9 +116,16 @@ class ResNet50(ResNets):
 
         stride_list = [1, 2, 2, 2]
 
+        if dataset == 'cifar10':
+            input_stem_kernel_size = 3
+        elif dataset == 'imagenet' or dataset == 'imagenette':
+            input_stem_kernel_size = 7
+        else:
+            input_stem_kernel_size = 7
+
         # build input stem
         input_stem = [ConvLayer(
-            3, input_channel, kernel_size=7, stride=2, use_bn=True, act_func='relu', ops_order='weight_bn_act',
+            3, input_channel, kernel_size=input_stem_kernel_size, stride=2, use_bn=True, act_func='relu', ops_order='weight_bn_act',
         )]
 
         # blocks
