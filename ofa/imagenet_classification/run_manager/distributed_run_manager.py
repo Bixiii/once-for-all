@@ -380,9 +380,6 @@ class DistributedRunManager:
                     'optimizer': self.optimizer.state_dict(),
                     'state_dict': self.net.state_dict(),
                 }, is_best=is_best)
-                if is_best:
-                    best_path_full_net = os.path.join(self.save_path, 'model_best_network_only.pth.tar')
-                    torch.save(self.net, best_path_full_net)
             self.tensorboard_writer.add_scalar('test accuracy', list_mean(val_top1), epoch)
             self.tensorboard_writer.add_scalar('loss', train_loss, epoch)
 

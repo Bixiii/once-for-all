@@ -7,7 +7,6 @@ import numpy as np
 import os
 import random
 
-import horovod.torch as hvd
 import torch
 
 from ofa.imagenet_classification.elastic_nn.modules.dynamic_op import (
@@ -18,20 +17,27 @@ from ofa.imagenet_classification.elastic_nn.training.progressive_shrinking impor
     load_models,
 )
 from ofa.imagenet_classification.networks import MobileNetV3Large, MobileNetV3, SmallResNets, ResNet50D, ResNet50
-from ofa.imagenet_classification.run_manager import DistributedImageNetRunConfig
+from ofa.imagenet_classification.run_manager import DistributedImageNetRunConfig, ImagenetRunConfig, RunManager
 from ofa.imagenet_classification.run_manager.distributed_run_manager import (
     DistributedRunManager,
 )
 from ofa.utils import MyRandomResizedCrop, download_url
 
-from settings import deactivate_cuda
+from settings import deactivate_cuda, use_hvd, tiny_gpu
+
+if use_hvd:
+    import horovod.torch as hvd
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
     '--dataset', type=str, default='imagenet', choices=['imagenet', 'cifar10', 'imagenette']
 )
 parser.add_argument(
-    '--net', type=str, default='MobileNetV3', choices=['MobileNetV3', 'ResNet50', 'ResNet18']  # TODO ResNet18 is not workin properly, also MobileNetV3 Baseline does not work?
+    '--data_path', type=str, default=None, help='Path to dataset'
+)
+parser.add_argument(
+    # TODO ResNet18 is not workin properly, also MobileNetV3 Baseline does not work?
+    '--net', type=str, default='MobileNetV3', choices=['MobileNetV3', 'ResNet50', 'ResNet18']
 )
 parser.add_argument(
     '--teacher_path', type=str, default=''
@@ -66,8 +72,8 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-args.experiment_folder = 'exp_OFA' + args.net + '_' + args.dataset + '_id' + args.experiment_id + '/'
-os.mkdir(args.experiment_folder)
+args.experiment_folder = 'exp/exp_OFA' + args.net + '_' + args.dataset + '_' + args.experiment_id + '/'
+os.makedirs(args.experiment_folder, exist_ok=True)
 
 if not args.teacher_path:
     args.teacher_path = args.experiment_folder + '/supernet/checkpoint/model_best.pth.tar'
@@ -82,7 +88,7 @@ if args.task == 'supernet':
     elif args.dataset == 'cifar10':
         args.image_size = '32'
     args.base_lr = 0.08
-    args.n_epochs = 500
+    args.n_epochs = 300
     args.warmup_epochs = 0
     args.warmup_lr = -1
     args.phase = 0
@@ -95,7 +101,7 @@ elif args.task == 'baseline':
     elif args.dataset == 'cifar10':
         args.image_size = '32'
     args.base_lr = 0.08
-    args.n_epochs = 500
+    args.n_epochs = 300
     args.warmup_epochs = 0
     args.warmup_lr = -1
     args.phase = 0
@@ -237,7 +243,7 @@ args.manual_seed = 0
 
 args.lr_schedule_type = 'cosine'
 
-args.valid_size = 1000
+args.valid_size = 100
 
 args.opt_type = 'sgd'
 args.momentum = 0.9
@@ -268,12 +274,18 @@ else:
 args.continuous_size = True
 args.not_sync_distributed_image_size = False
 
-if args.dataset == 'imagenet' or 'imagenette':
+if args.dataset == 'imagenet':
     if args.image_size is None:
         args.image_size = '128,160,192,224'
-    args.resize_scale = 0.8  # TODO imagenet was 0.08, I will now try 0.8
+    args.resize_scale = 0.08
     args.base_batch_size = 64
     args.weight_decay = 3e-5
+elif args.dataset == 'imagenette':
+    if args.image_size is None:
+        args.image_size = '128,160,192,224'
+    args.resize_scale = 0.8
+    args.base_batch_size = 64
+    args.weight_decay = 5e-4
 elif args.dataset == 'cifar10':
     if args.image_size is None:
         args.image_size = '32'
@@ -281,8 +293,14 @@ elif args.dataset == 'cifar10':
     args.base_batch_size = 128
     args.weight_decay = 5e-4
 
+# adapt patch size and image size, because my local machine does not have enough VRAM
+if tiny_gpu and (args.dataset == 'imagenet' or args.dataset == 'imagnette'):
+    args.base_batch_size = 32
+    args.image_size = '112'
+
 # comment describing current experiment
-comment = '_pt_' + 'OFA' + args.net + '-' + args.task + str(args.phase) + '_' + str(args.image_size) + 'x' + str(args.image_size) + '_' + args.dataset + '_bs' + str(args.base_batch_size) + 'lr' + str(args.base_lr)
+comment = '_pt_' + 'OFA' + args.net + '-' + args.task + str(args.phase) + '_' + str(args.image_size) + 'x' + str(
+    args.image_size) + '_' + args.dataset + '_bs' + str(args.base_batch_size) + 'lr' + str(args.base_lr)
 
 args.bn_momentum = 0.1
 args.bn_eps = 1e-5
@@ -305,22 +323,24 @@ else:
 if __name__ == "__main__":
     os.makedirs(args.target_path, exist_ok=True)
 
-    os.environ['CUDA_VISIBLE_DEVICES'] = '1,0'
     # Initialize Horovod
-    hvd.init()
-    # Pin GPU to be used to process local rank (one GPU per process)
-    if not deactivate_cuda:
+    if use_hvd:
+        # os.environ['CUDA_VISIBLE_DEVICES'] = '1,0'
+        hvd.init()
+        # Pin GPU to be used to process local rank (one GPU per process)
         torch.cuda.set_device(hvd.local_rank())
+        num_gpus = hvd.size()
+    elif torch.cuda.is_available():
+        torch.cuda.set_device('cuda:0')
+        num_gpus = 1
 
-    if args.pretrained:
+    if args.pretrained and use_hvd:
         args.teacher_path = download_url(
             "https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K7",
             model_dir=".torch/ofa_checkpoints/%d" % hvd.rank(),
         )
     elif not args.teacher_path:
         args.teacher_path = args.experiment_folder + 'supernet/checkpoint/model_best.pth.tar'
-
-    num_gpus = hvd.size()
 
     torch.manual_seed(args.manual_seed)
     torch.cuda.manual_seed_all(args.manual_seed)
@@ -345,13 +365,23 @@ if __name__ == "__main__":
         args.warmup_lr = args.base_lr
     args.train_batch_size = args.base_batch_size
     args.test_batch_size = args.base_batch_size
-    run_config = DistributedImageNetRunConfig(
-        # **args.__dict__, num_replicas=num_gpus if args.dataset == 'imagenet' else None, rank=hvd.rank()
-        **args.__dict__, num_replicas=num_gpus, rank=hvd.rank(), comment=comment
-    )
+    if use_hvd:
+        run_config = DistributedImageNetRunConfig(
+            # **args.__dict__, num_replicas=num_gpus if args.dataset == 'imagenet' else None, rank=hvd.rank()
+            **args.__dict__, num_replicas=num_gpus, rank=hvd.rank(), comment=comment
+        )
+    else:
+        run_config = ImagenetRunConfig(
+            **args.__dict__, comment=comment
+        )
 
     # print run config information
-    if hvd.rank() == 0:
+    if use_hvd:
+        if hvd.rank() == 0:
+            print("Run config:")
+            for k, v in run_config.config.items():
+                print("\t%s: %s" % (k, v))
+    else:
         print("Run config:")
         for k, v in run_config.config.items():
             print("\t%s: %s" % (k, v))
@@ -493,29 +523,38 @@ if __name__ == "__main__":
 
     """ Distributed RunManager """
     # Horovod: (optional) compression algorithm.
-    compression = hvd.Compression.fp16 if args.fp16_allreduce else hvd.Compression.none
-    distributed_run_manager = DistributedRunManager(
-        args.target_path,
-        net,
-        run_config,
-        compression,
-        backward_steps=args.dynamic_batch_size,
-        is_root=(hvd.rank() == 0),
-        comment=comment,
-    )
-    distributed_run_manager.save_config()
-    # hvd broadcast
-    distributed_run_manager.broadcast()
+    if use_hvd:
+        compression = hvd.Compression.fp16 if args.fp16_allreduce else hvd.Compression.none
+        run_manager = DistributedRunManager(
+            args.target_path,
+            net,
+            run_config,
+            compression,
+            backward_steps=args.dynamic_batch_size,
+            is_root=(hvd.rank() == 0),
+            comment=comment,
+        )
+        run_manager.save_config()
+        # hvd broadcast
+        run_manager.broadcast()
+    else:
+        run_manager = RunManager(
+            args.target_path,
+            net,
+            run_config,
+            init=False  # TODO find out what that does
+        )
+        run_manager.save_config()
 
     # load teacher net weights
     if args.kd_ratio > 0:
         load_models(
-            distributed_run_manager, args.teacher_model, model_path=args.teacher_path
+            run_manager, args.teacher_model, model_path=args.teacher_path
         )
 
     # training supernet
     if args.task == "supernet" or 'baseline':
-        distributed_run_manager.train(
+        run_manager.train(
             args, warmup_epochs=args.warmup_epochs, warmup_lr=args.warmup_lr
         )
 
@@ -538,8 +577,8 @@ if __name__ == "__main__":
         }
         if args.task == 'kernel':
             validate_func_dict['ks_list'] = sorted(args.ks_list)
-            if distributed_run_manager.start_epoch == 0:
-                if args.pretrained:
+            if run_manager.start_epoch == 0:
+                if args.pretrained and use_hvd:
                     args.ofa_checkpoint_path = download_url(
                         "https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K7",
                         model_dir=".torch/ofa_checkpoints/%d" % hvd.rank(),
@@ -548,21 +587,21 @@ if __name__ == "__main__":
                     args.ofa_checkpoint_path = os.path.join(args.source_path, 'checkpoint/model_best.pth.tar')
 
                 load_models(
-                    distributed_run_manager,
-                    distributed_run_manager.net,
+                    run_manager,
+                    run_manager.net,
                     args.ofa_checkpoint_path,
                 )
-                distributed_run_manager.write_log(
+                run_manager.write_log(
                     "%.3f\t%.3f\t%.3f\t%s"
                     % validate(
-                        distributed_run_manager, is_test=True, **validate_func_dict
+                        run_manager, is_test=True, **validate_func_dict
                     ),
                     'valid',
                 )
             else:
                 assert args.resume
             train(
-                distributed_run_manager,
+                run_manager,
                 args,
                 lambda _run_manager, epoch, is_test: validate(
                     _run_manager, epoch, is_test, **validate_func_dict
@@ -574,7 +613,7 @@ if __name__ == "__main__":
             )  # noqa
 
             if args.phase == 1:
-                if args.pretrained:
+                if args.pretrained and use_hvd:
                     args.ofa_checkpoint_path = download_url(
                         "https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K357",  # noqa
                         model_dir=".torch/ofa_checkpoints/%d" % hvd.rank(),
@@ -582,7 +621,7 @@ if __name__ == "__main__":
                 else:
                     args.ofa_checkpoint_path = os.path.join(args.source_path, 'checkpoint/model_best.pth.tar')
             else:
-                if args.pretrained:
+                if args.pretrained and use_hvd:
                     args.ofa_checkpoint_path = download_url(
                         "https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D34_E6_K357",  # noqa
                         model_dir=".torch/ofa_checkpoints/%d" % hvd.rank(),
@@ -591,7 +630,7 @@ if __name__ == "__main__":
                     args.ofa_checkpoint_path = os.path.join(args.source_path, 'checkpoint/model_best.pth.tar')
 
             train_elastic_depth(
-                train, distributed_run_manager, args, validate_func_dict
+                train, run_manager, args, validate_func_dict
             )
         elif args.task == 'expand':
             from ofa.imagenet_classification.elastic_nn.training.progressive_shrinking import (
@@ -599,7 +638,7 @@ if __name__ == "__main__":
             )  # noqa
 
             if args.phase == 1:
-                if args.pretrained:
+                if args.pretrained and use_hvd:
                     args.ofa_checkpoint_path = download_url(
                         "https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D234_E6_K357",  # noqa
                         model_dir=".torch/ofa_checkpoints/%d" % hvd.rank(),
@@ -607,7 +646,7 @@ if __name__ == "__main__":
                 else:
                     args.ofa_checkpoint_path = os.path.join(args.source_path, 'checkpoint/model_best.pth.tar')
             else:
-                if args.pretrained:
+                if args.pretrained and use_hvd:
                     args.ofa_checkpoint_path = download_url(
                         "https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D234_E46_K357",  # noqa
                         model_dir=".torch/ofa_checkpoints/%d" % hvd.rank(),
@@ -615,7 +654,7 @@ if __name__ == "__main__":
                 else:
                     args.ofa_checkpoint_path = os.path.join(args.source_path, 'checkpoint/model_best.pth.tar')
             train_elastic_expand(
-                train, distributed_run_manager, args, validate_func_dict
+                train, run_manager, args, validate_func_dict
             )
         elif args.task == 'width':
             from ofa.imagenet_classification.elastic_nn.training.progressive_shrinking import (
@@ -628,7 +667,7 @@ if __name__ == "__main__":
                 args.ofa_checkpoint_path = os.path.join(args.source_path, 'checkpoint/model_best.pth.tar')
 
             train_elastic_width_mult(
-                train, distributed_run_manager, args, validate_func_dict
+                train, run_manager, args, validate_func_dict
             )
         else:
             raise NotImplementedError

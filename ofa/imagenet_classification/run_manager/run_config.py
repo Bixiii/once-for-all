@@ -16,6 +16,7 @@ class RunConfig:
         lr_schedule_type,
         lr_schedule_param,
         dataset,
+        data_path,
         train_batch_size,
         test_batch_size,
         valid_size,
@@ -35,6 +36,7 @@ class RunConfig:
         self.lr_schedule_param = lr_schedule_param
 
         self.dataset = dataset
+        self.data_path = data_path
         self.train_batch_size = train_batch_size
         self.test_batch_size = test_batch_size
         self.valid_size = valid_size
@@ -128,6 +130,7 @@ class ImagenetRunConfig(RunConfig):
         lr_schedule_type='cosine',
         lr_schedule_param=None,
         dataset='imagenet',
+        data_path=None,
         train_batch_size=256,
         test_batch_size=500,
         valid_size=None,
@@ -152,6 +155,7 @@ class ImagenetRunConfig(RunConfig):
             lr_schedule_type,
             lr_schedule_param,
             dataset,
+            data_path,
             train_batch_size,
             test_batch_size,
             valid_size,
@@ -183,6 +187,7 @@ class ImagenetRunConfig(RunConfig):
             else:
                 raise NotImplementedError
             self.__dict__["_data_provider"] = DataProviderClass(
+                save_path=self.data_path,
                 train_batch_size=self.train_batch_size,
                 test_batch_size=self.test_batch_size,
                 valid_size=self.valid_size,
@@ -202,6 +207,7 @@ class DistributedImageNetRunConfig(ImagenetRunConfig):
         lr_schedule_type='cosine',
         lr_schedule_param=None,
         dataset='imagenet',
+        data_path=None,
         train_batch_size=64,
         test_batch_size=64,
         valid_size=None,
@@ -226,6 +232,7 @@ class DistributedImageNetRunConfig(ImagenetRunConfig):
             lr_schedule_type,
             lr_schedule_param,
             dataset,
+            data_path,
             train_batch_size,
             test_batch_size,
             valid_size,
@@ -260,6 +267,7 @@ class DistributedImageNetRunConfig(ImagenetRunConfig):
             else:
                 raise NotImplementedError
             self.__dict__['_data_provider'] = DataProviderClass(
+                save_path=self.data_path,
                 train_batch_size=self.train_batch_size,
                 test_batch_size=self.test_batch_size,
                 valid_size=self.valid_size,
