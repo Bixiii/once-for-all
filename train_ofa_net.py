@@ -36,8 +36,7 @@ parser.add_argument(
     '--data_path', type=str, default=None, help='Path to dataset'
 )
 parser.add_argument(
-    # TODO ResNet18 is not workin properly, also MobileNetV3 Baseline does not work?
-    '--net', type=str, default='MobileNetV3', choices=['MobileNetV3', 'ResNet50', 'ResNet18']
+    '--net', type=str, default='MobileNetV3', choices=['MobileNetV3', 'ResNet50']
 )
 parser.add_argument(
     '--teacher_path', type=str, default=''
@@ -80,10 +79,10 @@ if not args.teacher_path:
 
 args.image_size = None
 
-if args.task == 'supernet':
-    args.target_path = args.experiment_folder + 'supernet'
+if args.task == 'supernet' or args.task == 'baseline':
+    args.target_path = args.experiment_folder + args.task
     args.dynamic_batch_size = 1
-    if args.dataset == 'imagenet' or 'imagenette':
+    if args.dataset == 'imagenet' or args.dataset == 'imagenette':
         args.image_size = '224'
         args.base_lr = 0.04
     elif args.dataset == 'cifar10':
@@ -94,19 +93,16 @@ if args.task == 'supernet':
     args.warmup_lr = -1
     args.phase = 0
 
-elif args.task == 'baseline':
-    args.target_path = args.experiment_folder + 'baseline'
-    args.dynamic_batch_size = 1
-    if args.dataset == 'imagenet' or 'imagenette':
-        args.image_size = '224'
-        args.base_lr = 0.04
-    elif args.dataset == 'cifar10':
-        args.image_size = '32'
-        args.base_lr = 0.08
-    args.n_epochs = 300
-    args.warmup_epochs = 0
-    args.warmup_lr = -1
-    args.phase = 0
+    if args.task == 'baseline':
+        if args.net == 'MobileNetV3':
+            args.ks_list = '7'
+            args.width_mult_list = '1'
+            args.expand_list = '6'
+            args.depth_list = '4'
+        elif args.net == 'ResNet50':
+            args.width_mult_list = '1'
+            args.expand_list = '6'
+            args.depth_list = '4'
 
 elif args.task == 'kernel':
     args.source_path = args.experiment_folder + 'baseline'
@@ -298,7 +294,7 @@ elif args.dataset == 'cifar10':
     args.weight_decay = 5e-4
 
 # adapt patch size and image size, because my local machine does not have enough VRAM
-if tiny_gpu and (args.dataset == 'imagenet' or args.dataset == 'imagnette'):
+if tiny_gpu and (args.dataset == 'imagenet' or args.dataset == 'imagenette'):
     args.base_batch_size = 32
     args.image_size = '112'
 
@@ -421,21 +417,33 @@ if __name__ == "__main__":
             )
     elif args.task == 'baseline':
         if args.net == 'ResNet18':
-            net = SmallResNets(
-                n_classes=run_config.data_provider.n_classes,
-                bn_param=(args.bn_momentum, args.bn_eps),
-                dropout_rate=args.dropout,
-                blocks_per_layer_list=[2, 2, 2, 2],
-                width_mult=1.0,
-            )
-        elif args.net == 'MobileNetV3':
             raise NotImplementedError
-        elif args.net == 'ResNet50':
-            net = ResNet50(
+            # net = SmallResNets(
+            #     n_classes=run_config.data_provider.n_classes,
+            #     bn_param=(args.bn_momentum, args.bn_eps),
+            #     dropout_rate=args.dropout,
+            #     blocks_per_layer_list=[2, 2, 2, 2],
+            #     width_mult=1.0,
+            # )
+        elif args.net == 'MobileNetV3':
+            net = OFAMobileNetV3(
                 n_classes=run_config.data_provider.n_classes,
                 bn_param=(args.bn_momentum, args.bn_eps),
                 dropout_rate=args.dropout,
-                width_mult=1.0,
+                base_stage_width=args.base_stage_width,
+                width_mult=args.width_mult_list,
+                ks_list=args.ks_list,
+                expand_ratio_list=args.expand_list,
+                depth_list=args.depth_list,
+            )
+        elif args.net == 'ResNet50':
+            net = OFAResNets(
+                n_classes=run_config.data_provider.n_classes,
+                bn_param=(args.bn_momentum, args.bn_eps),
+                dropout_rate=args.dropout,
+                width_mult_list=args.width_mult_list,
+                expand_ratio_list=args.expand_list,
+                depth_list=args.depth_list,
             )
 
     else:
