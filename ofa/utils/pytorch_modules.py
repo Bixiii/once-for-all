@@ -25,6 +25,10 @@ def make_divisible(v, divisor, min_val=None):
     :param min_val:
     :return:
     """
+
+    if isinstance(v, str) or isinstance(divisor, str) or isinstance(min_val, str):
+        raise TypeError
+
     if min_val is None:
         min_val = divisor
     new_v = max(min_val, int(v + divisor / 2) // divisor * divisor)

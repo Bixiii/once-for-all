@@ -109,11 +109,11 @@ class DynamicMBConvLayer(MyModule):
                  kernel_size_list=3, expand_ratio_list=6, stride=1, act_func='relu6', use_se=False):
         super(DynamicMBConvLayer, self).__init__()
 
-        self.in_channel_list = in_channel_list
-        self.out_channel_list = out_channel_list
+        self.in_channel_list = [int(value) for value in in_channel_list]
+        self.out_channel_list = [int(value) for value in out_channel_list]
 
-        self.kernel_size_list = val2list(kernel_size_list)
-        self.expand_ratio_list = val2list(expand_ratio_list)
+        self.kernel_size_list = [int(value) for value in val2list(kernel_size_list)]
+        self.expand_ratio_list = [float(value) for value in val2list(expand_ratio_list)]
 
         self.stride = stride
         self.act_func = act_func

@@ -14,9 +14,10 @@ class OFAResNets(ResNets):
     def __init__(self, n_classes=1000, bn_param=(0.1, 1e-5), dropout_rate=0,
                  depth_list=2, expand_ratio_list=0.25, width_mult_list=1.0):
 
-        self.depth_list = val2list(depth_list)
-        self.expand_ratio_list = val2list(expand_ratio_list)
-        self.width_mult_list = val2list(width_mult_list)
+        self.depth_list = [int(value) for value in val2list(depth_list)]
+        self.depth_list = [int(value) for value in self.depth_list]
+        self.expand_ratio_list = [float(value) for value in val2list(expand_ratio_list)]
+        self.width_mult_list = [float(value) for value in val2list(width_mult_list)]
         # sort
         self.depth_list.sort()
         self.expand_ratio_list.sort()

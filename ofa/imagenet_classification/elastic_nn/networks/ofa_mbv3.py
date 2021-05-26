@@ -18,10 +18,10 @@ class OFAMobileNetV3(MobileNetV3):
     def __init__(self, n_classes=1000, bn_param=(0.1, 1e-5), dropout_rate=0.1, base_stage_width=None, width_mult=1.0,
                  ks_list=3, expand_ratio_list=6, depth_list=4):
 
-        self.width_mult = width_mult
-        self.ks_list = val2list(ks_list, 1)
-        self.expand_ratio_list = val2list(expand_ratio_list, 1)
-        self.depth_list = val2list(depth_list, 1)
+        self.width_mult = float(width_mult)
+        self.ks_list = [int(value) for value in val2list(ks_list, 1)]
+        self.expand_ratio_list = [int(value) for value in val2list(expand_ratio_list, 1)]
+        self.depth_list = [int(value) for value in val2list(depth_list, 1)]
 
         self.ks_list.sort()
         self.expand_ratio_list.sort()
@@ -61,6 +61,7 @@ class OFAMobileNetV3(MobileNetV3):
 
         for width, n_block, s, act_func, use_se in zip(width_list[2:], n_block_list[1:],
                                                        stride_stages[1:], act_stages[1:], se_stages[1:]):
+            n_block = int(n_block)
             self.block_group_info.append([_block_index + i for i in range(n_block)])
             _block_index += n_block
 
