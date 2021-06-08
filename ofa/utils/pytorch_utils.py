@@ -191,7 +191,7 @@ def build_optimizer(net_params, opt_type, opt_param, init_lr, weight_decay, no_d
     if opt_type == 'sgd':
         opt_param = {} if opt_param is None else opt_param
         momentum, nesterov = opt_param.get('momentum', 0.9), opt_param.get('nesterov', True)
-        optimizer = torch.optim.SGD(net_params, init_lr, momentum=momentum, nesterov=nesterov)
+        optimizer = torch.optim.SGD(net_params, lr=init_lr, momentum=momentum, weight_decay=weight_decay, nesterov=nesterov)
     elif opt_type == 'adam':
         optimizer = torch.optim.Adam(net_params, init_lr)
     else:
