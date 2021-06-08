@@ -93,21 +93,9 @@ def train_one_epoch(run_manager, args, epoch, warmup_epochs=0, warmup_lr=0):
     losses = DistributedMetric('train_loss') if distributed else AverageMeter()
     metric_dict = run_manager.get_metric_dict()
 
-    with tqdm(total=nBatch,
-              desc='Train Epoch #{}'.format(epoch + 1),
-              disable=distributed and not run_manager.is_root) as t:
-        end = time.time()
+    with tqdm(total=nBatch, desc='Train Epoch #{}'.format(epoch + 1), disable=distributed and not run_manager.is_root) as t:
         for i, (images, labels) in enumerate(run_manager.run_config.train_loader):
             MyRandomResizedCrop.BATCH = i
-            data_time.update(time.time() - end)
-            if epoch < warmup_epochs:
-                new_lr = run_manager.run_config.warmup_adjust_learning_rate(
-                    run_manager.optimizer, warmup_epochs * nBatch, nBatch, epoch, i, warmup_lr,
-                )
-            else:
-                new_lr = run_manager.run_config.adjust_learning_rate(
-                    run_manager.optimizer, epoch - warmup_epochs, i, nBatch
-                )
 
             images, labels = images.cuda(), labels.cuda()
             target = labels
@@ -138,14 +126,12 @@ def train_one_epoch(run_manager, args, epoch, warmup_epochs=0, warmup_lr=0):
                 output = run_manager.net(images)
                 if args.kd_ratio == 0:
                     loss = run_manager.train_criterion(output, labels)
-                    loss_type = 'ce'
                 else:
                     if args.kd_type == 'ce':
                         kd_loss = cross_entropy_loss_with_soft_target(output, soft_label)
                     else:
                         kd_loss = F.mse_loss(output, soft_logits)
                     loss = args.kd_ratio * kd_loss + run_manager.train_criterion(output, labels)
-                    loss_type = '%.1fkd-%s & ce' % (args.kd_ratio, args.kd_type)
 
                 # measure accuracy and record loss
                 loss_of_subnets.append(loss)
@@ -160,14 +146,10 @@ def train_one_epoch(run_manager, args, epoch, warmup_epochs=0, warmup_lr=0):
                 'loss': losses.avg.item(),
                 **run_manager.get_metric_vals(metric_dict, return_dict=True),
                 'R': images.size(2),
-                'lr': new_lr,
-                'loss_type': loss_type,
                 'seed': str(subnet_seed),
                 'str': subnet_str,
-                'data_time': data_time.avg,
             })
             t.update(1)
-            end = time.time()
     return losses.avg.item(), run_manager.get_metric_vals(metric_dict)
 
 
