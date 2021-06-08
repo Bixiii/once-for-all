@@ -16,7 +16,7 @@ from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3, OFAR
 from ofa.imagenet_classification.elastic_nn.training.progressive_shrinking import (
     load_models,
 )
-from ofa.imagenet_classification.networks import MobileNetV3Large, MobileNetV3, SmallResNets, ResNet50D, ResNet50
+from ofa.imagenet_classification.networks import MobileNetV3Large, MobileNetV3, SmallResNets, ResNet50D, ResNet50, MyResNet50
 from ofa.imagenet_classification.run_manager import DistributedImageNetRunConfig, ImagenetRunConfig, RunManager
 from ofa.imagenet_classification.run_manager import MyRunManager, MyImagenetRunConfig
 from ofa.imagenet_classification.run_manager.distributed_run_manager import (
@@ -37,7 +37,7 @@ parser.add_argument(
     '--data_path', type=str, default=None, help='Path to dataset'
 )
 parser.add_argument(
-    '--net', type=str, default='MobileNetV3', choices=['MobileNetV3', 'ResNet50']
+    '--net', type=str, default='MobileNetV3', choices=['MobileNetV3', 'ResNet50', 'MyResNet50']
 )
 parser.add_argument(
     '--teacher_path', type=str, default=''
@@ -419,6 +419,8 @@ if __name__ == "__main__":
                 dropout_rate=args.dropout,
                 width_mult=1.0,
             )
+        elif args.net == 'MyResNet50':
+            net = MyResNet50()
     elif args.task == 'baseline':
         if args.net == 'ResNet18':
             raise NotImplementedError

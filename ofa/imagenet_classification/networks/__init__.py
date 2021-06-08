@@ -5,6 +5,7 @@
 from .proxyless_nets import *
 from .mobilenet_v3 import *
 from .resnets import *
+from .my_resnet import *
 
 
 def get_net_by_name(name):
