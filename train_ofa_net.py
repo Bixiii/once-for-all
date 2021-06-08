@@ -18,6 +18,7 @@ from ofa.imagenet_classification.elastic_nn.training.progressive_shrinking impor
 )
 from ofa.imagenet_classification.networks import MobileNetV3Large, MobileNetV3, SmallResNets, ResNet50D, ResNet50
 from ofa.imagenet_classification.run_manager import DistributedImageNetRunConfig, ImagenetRunConfig, RunManager
+from ofa.imagenet_classification.run_manager import MyRunManager, MyImagenetRunConfig
 from ofa.imagenet_classification.run_manager.distributed_run_manager import (
     DistributedRunManager,
 )
@@ -247,13 +248,13 @@ args.valid_size = None
 
 args.opt_type = 'sgd'
 args.momentum = 0.9
-if args.dataset == 'imagenet' or 'imagenette':
+if args.dataset == 'imagenet' or args.dataset == 'imagenette':
     args.no_nesterov = True
-    args.label_smoothing = 0.1
+    args.label_smoothing = 0.1  # set to 0, to deactivate
     args.no_decay_keys = 'bn#bias'
 elif args.dataset == 'cifar10':
     args.no_nesterov = True
-    args.label_smoothing = 0.01
+    args.label_smoothing = 0   # set to 0, to deactivate
     args.no_decay_keys = None
 
 args.fp16_allreduce = False
@@ -294,9 +295,12 @@ elif args.dataset == 'cifar10':
     args.weight_decay = 5e-4
 
 # adapt patch size and image size, because my local machine does not have enough VRAM
-if tiny_gpu and (args.dataset == 'imagenet' or args.dataset == 'imagenette'):
-    args.base_batch_size = 32
-    args.image_size = '112'
+if tiny_gpu:
+    if args.dataset == 'imagenet' or args.dataset == 'imagenette':
+        args.base_batch_size = 32
+        args.image_size = '112'
+    else:
+        args.base_batch_size = 32
 
 # comment describing current experiment
 comment = '_pt_' + 'OFA' + args.net + '-' + args.task + str(args.phase) + '_' + str(args.image_size) + 'x' + str(
@@ -370,7 +374,7 @@ if __name__ == "__main__":
             **args.__dict__, num_replicas=num_gpus, rank=hvd.rank(), comment=comment
         )
     else:
-        run_config = ImagenetRunConfig(
+        run_config = MyImagenetRunConfig(
             **args.__dict__, comment=comment
         )
 
@@ -549,11 +553,10 @@ if __name__ == "__main__":
         # hvd broadcast
         run_manager.broadcast()
     else:
-        run_manager = RunManager(
+        run_manager = MyRunManager(
             args.target_path,
             net,
             run_config,
-            init=True,  # does not matter, assigns some values
             comment=comment,
         )
         run_manager.save_config()
