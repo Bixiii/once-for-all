@@ -35,6 +35,8 @@ class Cifar10DataProvider(DataProvider):
         warnings.filterwarnings('ignore')
         self._save_path = save_path
 
+        if not isinstance(image_size, int):
+            raise TypeError('Elastic resolution for Cifar10 not supported, image size must be of type int')
         self.image_size = image_size  # int or list of int
         self.distort_color = 'None'
         self.resize_scale = 1
@@ -45,18 +47,18 @@ class Cifar10DataProvider(DataProvider):
         self.train = torch.utils.data.DataLoader(
             train_dataset,
             batch_size=train_batch_size,
-            shuffle=True,
+            shuffle=False,
             num_workers=n_worker,
-            pin_memory=True,
+            # pin_memory=True,
         )
 
         test_dataset = self.test_dataset(self.build_valid_transform())
         self.test = torch.utils.data.DataLoader(
             test_dataset,
             batch_size=test_batch_size,
-            shuffle=True,
+            shuffle=False,
             num_workers=n_worker,
-            pin_memory=True,
+            # pin_memory=True,
         )
 
         self.valid = self.test
@@ -120,58 +122,7 @@ class Cifar10DataProvider(DataProvider):
         )
 
     def assign_active_img_size(self, new_img_size):
-        raise Warning('assign_acitve_img_size called in Cifar10 dataset <- this should not happen!')
-        self.active_img_size = new_img_size
-        if self.active_img_size not in self._valid_transform_dict:
-            self._valid_transform_dict[
-                self.active_img_size
-            ] = self.build_valid_transform()
-        # change the transform of the valid and test set
-        self.valid.dataset.transform = self._valid_transform_dict[self.active_img_size]
-        self.test.dataset.transform = self._valid_transform_dict[self.active_img_size]
+        pass  # elastic resolution does not make sense for cifar10
 
-    def build_sub_train_loader(
-        self, n_images, batch_size, num_worker=None, num_replicas=None, rank=None
-    ):
-        raise Warning('build_sub_train_loader called in Cifar10 dataset <- this should not happen!')
-        # used for resetting BN running statistics
-        if self.__dict__.get('sub_train_%d' % self.active_img_size, None) is None:
-            if num_worker is None:
-                num_worker = self.train.num_workers
-
-            n_samples = len(self.train.dataset)
-            g = torch.Generator()
-            g.manual_seed(DataProvider.SUB_SEED)
-            rand_indexes = torch.randperm(n_samples, generator=g).tolist()
-
-            new_train_dataset = self.train_dataset(
-                self.build_train_transform(
-                    image_size=self.active_img_size, print_log=False
-                )
-            )
-            chosen_indexes = rand_indexes[:n_images]
-            if num_replicas is not None:
-                sub_sampler = MyDistributedSampler(
-                    new_train_dataset,
-                    num_replicas,
-                    rank,
-                    True,
-                    np.array(chosen_indexes),
-                )
-            else:
-                sub_sampler = torch.utils.data.sampler.SubsetRandomSampler(
-                    chosen_indexes
-                )
-            sub_data_loader = torch.utils.data.DataLoader(
-                new_train_dataset,
-                batch_size=batch_size,
-                sampler=sub_sampler,
-                num_workers=num_worker,
-                pin_memory=True,
-            )
-            self.__dict__['sub_train_%d' % self.active_img_size] = []
-            for images, labels in sub_data_loader:
-                self.__dict__['sub_train_%d' % self.active_img_size].append(
-                    (images, labels)
-                )
-        return self.__dict__['sub_train_%d' % self.active_img_size]
+    def build_sub_train_loader(self, n_images, batch_size, num_worker=None, num_replicas=None, rank=None):
+        pass  # used to reset bn statistics in validate all resolutions, no elastic resolution in cifar10
