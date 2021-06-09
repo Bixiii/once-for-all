@@ -413,11 +413,12 @@ if __name__ == "__main__":
                 depth_param=4,
             )
         elif args.net == 'ResNet50':
-            net = ResNet50D(  # ResNet50D (dense) as teacher model
+            net = ResNet50(  # ResNet50D (dense) as teacher model
                 n_classes=run_config.data_provider.n_classes,
                 bn_param=(args.bn_momentum, args.bn_eps),
                 dropout_rate=args.dropout,
                 width_mult=1.0,
+                dataset='cifar10'
             )
         elif args.net == 'MyResNet50':
             net = MyResNet50()
