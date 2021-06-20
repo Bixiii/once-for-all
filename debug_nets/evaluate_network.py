@@ -1,4 +1,5 @@
 import argparse
+from tqdm import tqdm
 import os
 import torch
 import torchvision
@@ -167,12 +168,47 @@ else:
     arch_config = net.set_active_subnet(d=args.subnet_depth, e=args.subnet_expand, w=args.width_mult_list.index(args.subnet_width))
     print(arch_config)
 
-# calculate accuracy on test data
-top1_acc = eval_helper.validate(net=net,
-                                path=args.data_path,
-                                image_size=args.image_size,
-                                data_loader=data_loader,
-                                device=args.device)
 
-# print accuracy
-print('\n***Top1 accuracy is: ' + str(top1_acc) + '%***\n')
+def test(net, data_loader=data_loader, device=args.device):
+    print('==> Eval model ...')
+    net.eval()
+    net = net.to(device)
+    correct = 0
+    total = 0
+
+    with torch.no_grad():
+        with tqdm(total=len(data_loader), desc='Validate') as t:
+            for i, (images, labels) in enumerate(data_loader):
+                images, labels = images.to(device), labels.to(device)
+                # compute output
+                output = net(images)
+
+                # measure accuracy
+                _, predicted = output.max(1)
+                total += labels.size(0)
+                correct += predicted.eq(labels).sum().item()
+
+                t.set_postfix({
+                    # 'loss': losses.avg,
+                    'top1': correct/total,
+                    'img_size': images.size(2),
+                })
+                t.update(1)
+    print('Results: \t top1=%.2f' % ((correct/total)*100))
+    return correct/total
+
+
+# calculate accuracy
+def test_with_ofa_eval_helper(net=net, path=args.data_path, image_size=args.image_size, data_loader=data_loader, device=args.device):
+    top1_acc = eval_helper.validate(net=net,
+                                path=path,
+                                image_size=image_size,
+                                data_loader=data_loader,
+                                device=device)
+    print('Results: \t top1=' + str(top1_acc))
+    return top1_acc
+
+
+# test_with_ofa_eval_helper(net)
+test(net)
+
