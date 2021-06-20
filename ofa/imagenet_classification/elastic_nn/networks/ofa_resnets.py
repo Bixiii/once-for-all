@@ -12,7 +12,7 @@ __all__ = ['OFAResNets']
 class OFAResNets(ResNets):
 
     def __init__(self, n_classes=1000, bn_param=(0.1, 1e-5), dropout_rate=0,
-                 depth_list=2, expand_ratio_list=0.25, width_mult_list=1.0):
+                 depth_list=2, expand_ratio_list=0.25, width_mult_list=1.0, dataset='imagnet'):
 
         self.depth_list = [int(value) for value in val2list(depth_list)]
         self.depth_list = [int(value) for value in self.depth_list]
@@ -22,6 +22,7 @@ class OFAResNets(ResNets):
         self.depth_list.sort()
         self.expand_ratio_list.sort()
         self.width_mult_list.sort()
+        self.dataset = dataset
 
         input_channel = [
             make_divisible(64 * width_mult, MyNetwork.CHANNEL_DIVISIBLE) for width_mult in self.width_mult_list
@@ -40,14 +41,27 @@ class OFAResNets(ResNets):
         stride_list = [1, 2, 2, 2]
 
         # build input stem (same input_stem as in ResNet50D used)
-        input_stem = [
-            DynamicConvLayer(val2list(3), mid_input_channel, 3, stride=2, use_bn=True, act_func='relu'),
-            ResidualBlock(
-                DynamicConvLayer(mid_input_channel, mid_input_channel, 3, stride=1, use_bn=True, act_func='relu'),
-                IdentityLayer(mid_input_channel, mid_input_channel)
-            ),
-            DynamicConvLayer(mid_input_channel, input_channel, 3, stride=1, use_bn=True, act_func='relu')
-        ]
+        max_pooling = True
+        downsample_mode = 'avgpool_conv'
+        if dataset == 'cifar10':
+            input_stem = [
+                DynamicConvLayer(val2list(3), val2list(64), kernel_size=3, stride=1, use_bn=True, act_func='relu')
+            ]
+            max_pooling = False
+            downsample_mode = 'conv'
+        elif dataset == 'imagenette':
+            input_stem = [
+                DynamicConvLayer(val2list(3), val2list(64), kernel_size=7, stride=2, use_bn=True, act_func='relu')
+            ]
+        else:
+            input_stem = [
+                    DynamicConvLayer(val2list(3), mid_input_channel, 3, stride=2, use_bn=True, act_func='relu'),
+                    ResidualBlock(
+                        DynamicConvLayer(mid_input_channel, mid_input_channel, 3, stride=1, use_bn=True, act_func='relu'),
+                        IdentityLayer(mid_input_channel, mid_input_channel)
+                    ),
+                    DynamicConvLayer(mid_input_channel, input_channel, 3, stride=1, use_bn=True, act_func='relu')
+                ]
 
         # blocks
         blocks = []
@@ -56,14 +70,14 @@ class OFAResNets(ResNets):
                 stride = s if i == 0 else 1
                 bottleneck_block = DynamicResNetBottleneckBlock(
                     input_channel, width, expand_ratio_list=self.expand_ratio_list,
-                    kernel_size=3, stride=stride, act_func='relu', downsample_mode='avgpool_conv',
+                    kernel_size=3, stride=stride, act_func='relu', downsample_mode=downsample_mode,
                 )
                 blocks.append(bottleneck_block)
                 input_channel = width
         # classifier
         classifier = DynamicLinearLayer(input_channel, n_classes, dropout_rate=dropout_rate)
 
-        super(OFAResNets, self).__init__(input_stem, blocks, classifier)
+        super(OFAResNets, self).__init__(input_stem, blocks, classifier, max_pooling=max_pooling)
 
         # set bn param
         self.set_bn_param(*bn_param)
@@ -87,7 +101,8 @@ class OFAResNets(ResNets):
                 pass
             else:
                 x = layer(x)
-        x = self.max_pooling(x)
+        if self.max_pooling:
+            x = self.max_pooling(x)
         for stage_id, block_idx in enumerate(self.grouped_block_index):
             depth_param = self.runtime_depth[stage_id]
             active_idx = block_idx[:len(block_idx) - depth_param]
@@ -160,7 +175,11 @@ class OFAResNets(ResNets):
     def set_active_subnet(self, d=None, e=None, w=None, **kwargs):
         depth = val2list(d, len(ResNets.BASE_DEPTH_LIST) + 1)  # +1 for input_stem
         expand_ratio = val2list(e, len(self.blocks))
-        width_mult = val2list(w, len(ResNets.BASE_DEPTH_LIST) + 2)  # +2 for both input_stem layers
+        if self.dataset == 'cifar10':
+            input_stem_layers = 1
+        else:
+            input_stem_layers = 2
+        width_mult = val2list(w, len(ResNets.BASE_DEPTH_LIST) + input_stem_layers)
 
         for block, e in zip(self.blocks, expand_ratio):
             if e is not None:

@@ -82,7 +82,7 @@ if args.task == 'supernet' or args.task == 'baseline':
     elif args.dataset == 'cifar10':
         args.image_size = '32'
         args.base_lr = 0.08
-    args.n_epochs = 300
+    args.n_epochs = 450
     args.warmup_epochs = 0
     args.warmup_lr = -1
     args.phase = 0
@@ -95,8 +95,8 @@ if args.task == 'supernet' or args.task == 'baseline':
             args.depth_list = '4'
         elif args.net == 'ResNet50':
             args.width_mult_list = '1'
-            args.expand_list = '6'
-            args.depth_list = '4'
+            args.expand_list = '0.35'
+            args.depth_list = '2'
 
 elif args.task == 'kernel':
     args.source_path = args.experiment_folder + 'baseline'
@@ -256,7 +256,7 @@ args.model_init = 'he_fout'
 args.validation_frequency = 1
 args.print_frequency = 10
 
-args.n_worker = 8
+args.n_worker = 2
 
 if args.dataset == 'imagenet':
     args.distort_color = 'tf'
@@ -398,15 +398,16 @@ if __name__ == "__main__":
                 depth_param=4,
             )
         elif args.net == 'ResNet50':
-            net = ResNet50(  # ResNet50D (dense) as teacher model
+            net = ResNet50(  # alternative ResNet50D (dense) as teacher model
                 n_classes=run_config.data_provider.n_classes,
                 bn_param=(args.bn_momentum, args.bn_eps),
                 dropout_rate=args.dropout,
                 width_mult=1.0,
-                dataset='cifar10'
+                dataset=args.dataset
             )
         elif args.net == 'MyResNet50':
-            net = MyResNet50()
+            net = MyResNet50()  # implementation from pytorch-cifar repo, used for reference
+
     elif args.task == 'baseline':
         if args.net == 'MobileNetV3':
             net = OFAMobileNetV3(
@@ -427,6 +428,7 @@ if __name__ == "__main__":
                 width_mult_list=args.width_mult_list,
                 expand_ratio_list=args.expand_list,
                 depth_list=args.depth_list,
+                dataset=args.dataset,
             )
 
     else:
@@ -473,7 +475,8 @@ if __name__ == "__main__":
                 dropout_rate=args.dropout,
                 expand_ratio_list=args.expand_list,
                 depth_list=args.depth_list,
-                width_mult_list=args.width_mult_list
+                width_mult_list=args.width_mult_list,
+                dataset=args.dataset,
             )
 
     # teacher model
@@ -489,13 +492,13 @@ if __name__ == "__main__":
                 depth_param=4,
             )
         elif args.net == 'ResNet50':
-            args.teacher_model = ResNet50D(  # ResNet50D (dense) as teacher model
+            args.teacher_model = ResNet50(  # alternative ResNet50D (dense) as teacher model
                 n_classes=run_config.data_provider.n_classes,
                 bn_param=(args.bn_momentum, args.bn_eps),
                 dropout_rate=args.dropout,
                 width_mult=1.0,
+                dataset=args.dataset,
             )
-
         args.teacher_model.cuda()
 
     """ Distributed RunManager """
