@@ -66,15 +66,16 @@ def validate(net, path, image_size, data_loader, batch_size=100, device='cuda:0'
     else:
         net = net.to(device)
 
-    data_loader.dataset.transform = transforms.Compose([
-        transforms.Resize(int(math.ceil(image_size / 0.875))),
-        transforms.CenterCrop(image_size),
-        transforms.ToTensor(),
-        transforms.Normalize(
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225]
-        ),
-    ])
+    if data_loader.dataset.transform is None:
+        data_loader.dataset.transform = transforms.Compose([
+            # transforms.Resize(int(math.ceil(image_size / 0.875))),
+            # transforms.CenterCrop(image_size),
+            transforms.ToTensor(),
+            transforms.Normalize(
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225]
+            ),
+        ])
 
     cudnn.benchmark = True
     criterion = nn.CrossEntropyLoss().to(device)

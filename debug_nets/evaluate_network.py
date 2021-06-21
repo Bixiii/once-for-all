@@ -20,14 +20,8 @@ parser.add_argument('--net', type=str, default='ResNet50', choices=['ResNet50', 
 parser.add_argument('--image_size', type=int)
 parser.add_argument('--supernet', dest='supernet', action='store_true')
 parser.set_defaults(supernet=False)
-parser.add_argument('--subnet_kernel', type=int, default=None,
-                    help='For ResNet: not available\nFor MobileNet: [3, 5, 7]')
-parser.add_argument('--subnet_depth', type=int, default=None, help='For ResNet: [0, 1, 2]\nFor MobileNet: [2, 3, 4]')
-parser.add_argument('--subnet_expand', type=str, default=None,
-                    help='For ResNet: value between 0 and 1\nFor MobileNet: [3, 4, 6]')
-parser.add_argument('--subnet_width', type=float, default=None, help='Value between 0 and 1')
-parser.add_argument('--subnet_random', type=bool, default=False,
-                    help='Set to True to sample and evaluate a random subnetwork')
+parser.add_argument('--subnet_random', dest='subnet_random', action='store_true', help='Set to True to sample and evaluate a random subnetwork')
+parser.set_defaults(subnet_random=False)
 args = parser.parse_args()
 
 # configure devices
@@ -84,7 +78,8 @@ else:
             n_classes=args.n_classes,
             depth_list=[0, 1, 2],
             expand_ratio_list=[0.2, 0.25, 0.35],
-            width_mult_list=args.width_mult_list
+            width_mult_list=args.width_mult_list,
+            dataset=args.dataset
         )
     elif args.net == 'MobileNetV3':
         net = OFAMobileNetV3(
@@ -94,14 +89,6 @@ else:
             expand_ratio_list=[3, 4, 6],
             width_mult=args.width_mult_list
         )
-    else:
-        raise NotImplementedError
-
-if args.subnet_expand is not None:
-    if args.net == 'ResNet50':
-        args.subnet_expand = float(args.subnet_expand)
-    elif args.net == 'MobileNetV3':
-        args.subnet_expand = int(args.subnet_expand)
     else:
         raise NotImplementedError
 
@@ -156,17 +143,14 @@ net.load_state_dict(init)
 # create network config (select network or a sub-network)
 if args.supernet:
     print('Evaluate super-net ...')
-elif args.random_subnet:
+elif args.subnet_random:
     print('Eval subnet ...')
     arch_config = net.sample_active_subnet()
+    arch_config['w'] = [args.width_mult_list[index] for index in arch_config['w']]
     print(arch_config)
-elif args.subnet_depth is None and args.subnet_expand is None and args.subnet_width is None:
+else:
     print('Evaluate max net ...')
     net.set_max_net()
-else:
-    print('Eval subnet ...')
-    arch_config = net.set_active_subnet(d=args.subnet_depth, e=args.subnet_expand, w=args.width_mult_list.index(args.subnet_width))
-    print(arch_config)
 
 
 def test(net, data_loader=data_loader, device=args.device):
@@ -209,6 +193,6 @@ def test_with_ofa_eval_helper(net=net, path=args.data_path, image_size=args.imag
     return top1_acc
 
 
-# test_with_ofa_eval_helper(net)
-test(net)
+test_with_ofa_eval_helper(net)
+# test(net)
 
