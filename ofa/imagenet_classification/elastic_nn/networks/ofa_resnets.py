@@ -45,13 +45,13 @@ class OFAResNets(ResNets):
         downsample_mode = 'avgpool_conv'
         if dataset == 'cifar10':
             input_stem = [
-                DynamicConvLayer(val2list(3), val2list(64), kernel_size=3, stride=1, use_bn=True, act_func='relu')
+                DynamicConvLayer(val2list(3), input_channel, kernel_size=3, stride=1, use_bn=True, act_func='relu')
             ]
             max_pooling = False
             downsample_mode = 'conv'
         elif dataset == 'imagenette':
             input_stem = [
-                DynamicConvLayer(val2list(3), val2list(64), kernel_size=7, stride=2, use_bn=True, act_func='relu')
+                DynamicConvLayer(val2list(3), input_channel, kernel_size=7, stride=2, use_bn=True, act_func='relu')
             ]
         else:
             input_stem = [
@@ -170,9 +170,21 @@ class OFAResNets(ResNets):
     """ set, sample and get active sub-networks """
 
     def set_max_net(self):
+        # for width_mult_list index is used instead of actual value
         self.set_active_subnet(d=max(self.depth_list), e=max(self.expand_ratio_list), w=len(self.width_mult_list) - 1)
 
     def set_active_subnet(self, d=None, e=None, w=None, **kwargs):
+        """ Select a subnet from the given parameters
+
+        Args:
+            d (): list of depth values (int)
+            e (): list of expand values (float)
+            w (): list of indices (int) of with multiplier list
+            **kwargs ():
+
+        Returns: string representation of now active subnet
+
+        """
         depth = val2list(d, len(ResNets.BASE_DEPTH_LIST) + 1)  # +1 for input_stem
         expand_ratio = val2list(e, len(self.blocks))
         if self.dataset == 'cifar10':
@@ -186,10 +198,12 @@ class OFAResNets(ResNets):
                 block.active_expand_ratio = e
 
         if width_mult[0] is not None:
-            self.input_stem[1].conv.active_out_channel = self.input_stem[0].active_out_channel = \
-                self.input_stem[0].out_channel_list[width_mult[0]]
+            self.input_stem[0].active_out_channel = self.input_stem[0].out_channel_list[width_mult[0]]
+            if len(self.input_stem) > 1:
+                self.input_stem[1].conv.active_out_channel = self.input_stem[0].out_channel_list[width_mult[0]]
         if width_mult[1] is not None:
-            self.input_stem[2].active_out_channel = self.input_stem[2].out_channel_list[width_mult[1]]
+            if len(self.input_stem) > 2:
+                self.input_stem[2].active_out_channel = self.input_stem[2].out_channel_list[width_mult[1]]
 
         if depth[0] is not None:
             self.input_stem_skipping = (depth[0] != max(self.depth_list))
@@ -218,10 +232,16 @@ class OFAResNets(ResNets):
             depth_setting.append(random.choice(self.depth_list))
 
         # sample width_mult
-        width_mult_setting = [
-            random.choice(list(range(len(self.input_stem[0].out_channel_list)))),
-            random.choice(list(range(len(self.input_stem[2].out_channel_list)))),
-        ]
+        if len(self.input_stem) > 2:
+            width_mult_setting = [
+                random.choice(list(range(len(self.input_stem[0].out_channel_list)))),
+                random.choice(list(range(len(self.input_stem[2].out_channel_list)))),
+            ]
+        else:
+            width_mult_setting = [
+                random.choice(list(range(len(self.input_stem[0].out_channel_list)))),
+            ]
+
         for stage_id, block_idx in enumerate(self.grouped_block_index):
             stage_first_block = self.blocks[block_idx[0]]
             width_mult_setting.append(
@@ -261,14 +281,17 @@ class OFAResNets(ResNets):
 
     def get_active_net_config(self):
         input_stem_config = [self.input_stem[0].get_active_subnet_config(3)]
-        if self.input_stem_skipping <= 0:
-            input_stem_config.append({
-                'name': ResidualBlock.__name__,
-                'conv': self.input_stem[1].conv.get_active_subnet_config(self.input_stem[0].active_out_channel),
-                'shortcut': IdentityLayer(self.input_stem[0].active_out_channel, self.input_stem[0].active_out_channel),
-            })
-        input_stem_config.append(self.input_stem[2].get_active_subnet_config(self.input_stem[0].active_out_channel))
-        input_channel = self.input_stem[2].active_out_channel
+        if len(self.input_stem) > 2:
+            if self.input_stem_skipping <= 0:
+                input_stem_config.append({
+                    'name': ResidualBlock.__name__,
+                    'conv': self.input_stem[1].conv.get_active_subnet_config(self.input_stem[0].active_out_channel),
+                    'shortcut': IdentityLayer(self.input_stem[0].active_out_channel, self.input_stem[0].active_out_channel),
+                })
+            input_stem_config.append(self.input_stem[2].get_active_subnet_config(self.input_stem[0].active_out_channel))
+            input_channel = self.input_stem[2].active_out_channel
+        else:
+            input_channel = self.input_stem[0].active_out_channel
 
         blocks_config = []
         for stage_id, block_idx in enumerate(self.grouped_block_index):
