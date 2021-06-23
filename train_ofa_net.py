@@ -533,7 +533,7 @@ if __name__ == "__main__":
         )
 
     # training supernet
-    if args.task == "supernet" or 'baseline':
+    if args.task == 'supernet' or args.task == 'baseline':
         run_manager.train(
             args, warmup_epochs=args.warmup_epochs, warmup_lr=args.warmup_lr
         )
