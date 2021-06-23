@@ -258,13 +258,16 @@ class OFAResNets(ResNets):
 
     def get_active_subnet(self, preserve_weight=True):
         input_stem = [self.input_stem[0].get_active_subnet(3, preserve_weight)]
-        if self.input_stem_skipping <= 0:
-            input_stem.append(ResidualBlock(
-                self.input_stem[1].conv.get_active_subnet(self.input_stem[0].active_out_channel, preserve_weight),
-                IdentityLayer(self.input_stem[0].active_out_channel, self.input_stem[0].active_out_channel)
-            ))
-        input_stem.append(self.input_stem[2].get_active_subnet(self.input_stem[0].active_out_channel, preserve_weight))
-        input_channel = self.input_stem[2].active_out_channel
+        if len(input_stem) > 2:
+            if self.input_stem_skipping <= 0:
+                input_stem.append(ResidualBlock(
+                    self.input_stem[1].conv.get_active_subnet(self.input_stem[0].active_out_channel, preserve_weight),
+                    IdentityLayer(self.input_stem[0].active_out_channel, self.input_stem[0].active_out_channel)
+                ))
+            input_stem.append(self.input_stem[2].get_active_subnet(self.input_stem[0].active_out_channel, preserve_weight))
+            input_channel = self.input_stem[2].active_out_channel
+        else:
+            input_channel = self.input_stem[0].active_out_channel
 
         blocks = []
         for stage_id, block_idx in enumerate(self.grouped_block_index):
