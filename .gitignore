@@ -113,3 +113,11 @@ venv.bak/
 *.xml
 *.iml
 /bash/distributed_imagenet.sh
+
+# data
+dataset
+exp
+logs
+runs
+tutorial/.torch
+tutorial/local_lut.npy
