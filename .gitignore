@@ -121,3 +121,4 @@ logs
 runs
 tutorial/.torch
 tutorial/local_lut.npy
+.torch
