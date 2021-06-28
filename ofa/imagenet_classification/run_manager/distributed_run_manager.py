@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 from tqdm import tqdm
+from torch.utils.tensorboard import SummaryWriter
 
 from ofa.utils import cross_entropy_with_label_smoothing, cross_entropy_loss_with_soft_target, write_log, init_models
 from ofa.utils import DistributedMetric, list_mean, get_net_info, accuracy, AverageMeter, mix_labels, mix_images
@@ -21,7 +22,7 @@ __all__ = ['DistributedRunManager']
 
 class DistributedRunManager:
 
-    def __init__(self, path, net, run_config, hvd_compression, backward_steps=1, is_root=False, init=True):
+    def __init__(self, path, net, run_config, hvd_compression, backward_steps=1, is_root=False, init=True, comment=''):
         import horovod.torch as hvd
 
         self.path = path
@@ -82,6 +83,9 @@ class DistributedRunManager:
             self.optimizer, named_parameters=self.net.named_parameters(), compression=hvd_compression,
             backward_passes_per_step=backward_steps,
         )
+
+        # Tensorboard set-up
+        self.tensorboard_writer = SummaryWriter(comment=comment)
 
     """ save path and log path """
 
@@ -371,6 +375,8 @@ class DistributedRunManager:
                     'optimizer': self.optimizer.state_dict(),
                     'state_dict': self.net.state_dict(),
                 }, is_best=is_best)
+            self.tensorboard_writer.add_scalar('test accuracy', list_mean(val_top1), epoch)
+            self.tensorboard_writer.add_scalar('loss', train_loss, epoch)
 
     def reset_running_statistics(self, net=None, subset_size=2000, subset_batch_size=200, data_loader=None):
         from ofa.imagenet_classification.elastic_nn.utils import set_running_statistics

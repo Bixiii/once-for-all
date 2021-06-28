@@ -13,6 +13,7 @@ import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.optim
 from tqdm import tqdm
+from torch.utils.tensorboard import SummaryWriter
 
 from ofa.utils import get_net_info, cross_entropy_loss_with_soft_target, cross_entropy_with_label_smoothing
 from ofa.utils import AverageMeter, accuracy, write_log, mix_images, mix_labels, init_models
@@ -23,7 +24,7 @@ __all__ = ['RunManager']
 
 class RunManager:
 
-    def __init__(self, path, net, run_config, init=True, measure_latency=None, no_gpu=False):
+    def __init__(self, path, net, run_config, init=True, measure_latency=None, no_gpu=False, comment=''):
         self.path = path
         self.net = net
         self.run_config = run_config
@@ -86,6 +87,9 @@ class RunManager:
         self.optimizer = self.run_config.build_optimizer(net_params)
 
         self.net = torch.nn.DataParallel(self.net)
+
+        # Tensorboard set-up
+        self.tensorboard_writer = SummaryWriter(comment=comment)
 
     """ save path and log path """
 
@@ -365,6 +369,8 @@ class RunManager:
                 'optimizer': self.optimizer.state_dict(),
                 'state_dict': self.network.state_dict(),
             }, is_best=is_best)
+            self.tensorboard_writer.add_scalar('test accuracy', np.mean(val_acc), epoch)
+            self.tensorboard_writer.add_scalar('loss', train_loss, epoch)
 
     def reset_running_statistics(self, net=None, subset_size=2000, subset_batch_size=200, data_loader=None):
         from ofa.imagenet_classification.elastic_nn.utils import set_running_statistics
