@@ -24,17 +24,45 @@ if use_hvd:
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
+    '--dataset', type=str, default='imagenet',
+    choices=[
+        'imagenet',
+    ]
+)
+parser.add_argument(
     '--data_path', type=str, default=None, help='Path to dataset'
 )
-parser.add_argument('--task', type=str, default='depth', choices=[
-    'kernel', 'depth', 'expand',
-])
-parser.add_argument('--phase', type=int, default=1, choices=[1, 2])
-parser.add_argument('--resume', action='store_true')
+parser.add_argument(
+    '--net', type=str, default='MobileNetV3',
+    choices=[
+        'MobileNetV3',
+    ]
+)
+parser.add_argument(
+    '--task', type=str, default='depth',
+    choices=[
+        'kernel',
+        'depth',
+        'expand',
+    ]
+)
+parser.add_argument(
+    '--phase', type=int, default=1, choices=[1, 2]
+)
+parser.add_argument(
+    '--resume', action='store_true'
+)
+parser.add_argument(
+    '--experiment_id', type=str, default=''
+)
 
 args = parser.parse_args()
+
+args.experiment_folder = 'exp/exp_OFA' + args.net + '_' + args.dataset + '_' + args.experiment_id + '/'
+os.makedirs(args.experiment_folder, exist_ok=True)
+
 if args.task == 'kernel':
-    args.target_path = 'exp/normal2kernel'
+    args.target_path = args.experiment_folder + 'normal2kernel'
     args.dynamic_batch_size = 1
     args.n_epochs = 120
     args.base_lr = 3e-2
@@ -44,7 +72,7 @@ if args.task == 'kernel':
     args.expand_list = '6'
     args.depth_list = '4'
 elif args.task == 'depth':
-    args.target_path = 'exp/kernel2kernel_depth/phase%d' % args.phase
+    args.target_path = args.experiment_folder + 'kernel2kernel_depth/phase%d' % args.phase
     args.dynamic_batch_size = 2
     if args.phase == 1:
         args.n_epochs = 25
@@ -63,7 +91,7 @@ elif args.task == 'depth':
         args.expand_list = '6'
         args.depth_list = '2,3,4'
 elif args.task == 'expand':
-    args.target_path = 'exp/kernel_depth2kernel_depth_width/phase%d' % args.phase
+    args.target_path = args.experiment_folder + 'kernel_depth2kernel_depth_width/phase%d' % args.phase
     args.dynamic_batch_size = 4
     if args.phase == 1:
         args.n_epochs = 25
@@ -108,6 +136,11 @@ args.distort_color = 'tf'
 args.image_size = '128,160,192,224'
 args.continuous_size = True
 args.not_sync_distributed_image_size = False
+
+# comment describing current experiment
+comment = '_pt_' + 'OFA' + args.net + '-' + args.task + str(args.phase) + '_' + str(args.image_size) + 'x' + \
+          str(args.image_size) + '_' + args.dataset + '_bs' + str(args.base_batch_size) + 'lr' + str(args.base_lr) + \
+          str(args.experiment_id)
 
 args.bn_momentum = 0.1
 args.bn_eps = 1e-5
@@ -204,15 +237,25 @@ if __name__ == '__main__':
 
     args.width_mult_list = args.width_mult_list[0] if len(args.width_mult_list) == 1 else args.width_mult_list
     net = OFAMobileNetV3(
-        n_classes=run_config.data_provider.n_classes, bn_param=(args.bn_momentum, args.bn_eps),
-        dropout_rate=args.dropout, base_stage_width=args.base_stage_width, width_mult=args.width_mult_list,
-        ks_list=args.ks_list, expand_ratio_list=args.expand_list, depth_list=args.depth_list
+        n_classes=run_config.data_provider.n_classes,
+        bn_param=(args.bn_momentum, args.bn_eps),
+        dropout_rate=args.dropout,
+        base_stage_width=args.base_stage_width,
+        width_mult=args.width_mult_list,
+        ks_list=args.ks_list,
+        expand_ratio_list=args.expand_list,
+        depth_list=args.depth_list
     )
     # teacher model
     if args.kd_ratio > 0:
         args.teacher_model = MobileNetV3Large(
-            n_classes=run_config.data_provider.n_classes, bn_param=(args.bn_momentum, args.bn_eps),
-            dropout_rate=0, width_mult=1.0, ks=7, expand_ratio=6, depth_param=4,
+            n_classes=run_config.data_provider.n_classes,
+            bn_param=(args.bn_momentum, args.bn_eps),
+            dropout_rate=0,
+            width_mult=1.0,
+            ks=7,
+            expand_ratio=6,
+            depth_param=4,
         )
         args.teacher_model.cuda()
 
@@ -227,6 +270,7 @@ if __name__ == '__main__':
             compression,
             backward_steps=args.dynamic_batch_size,
             is_root=(hvd.rank() == 0),
+            comment=comment,
         )
         run_manager.save_config()
         # hvd broadcast
@@ -236,7 +280,8 @@ if __name__ == '__main__':
             args.target_path,
             net,
             run_config,
-            init=False
+            init=False,
+            comment=comment,
         )
         run_manager.save_config()
 
