@@ -79,7 +79,7 @@ elif args.task == 'depth':
         args.base_lr = 2.5e-3
         args.warmup_epochs = 0
         args.warmup_lr = -1
-        args.ks_list = '3,5,7'
+        args.ks_list = '7'
         args.expand_list = '6'
         args.depth_list = '3,4'
     else:
@@ -87,7 +87,7 @@ elif args.task == 'depth':
         args.base_lr = 7.5e-3
         args.warmup_epochs = 5
         args.warmup_lr = -1
-        args.ks_list = '3,5,7'
+        args.ks_list = '7'
         args.expand_list = '6'
         args.depth_list = '2,3,4'
 elif args.task == 'expand':
@@ -321,23 +321,23 @@ if __name__ == '__main__':
         if args.phase == 1:
             if use_hvd:
                 args.ofa_checkpoint_path = download_url(
-                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K357',
+                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K7',
                     model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
                 )
             else:
                 args.ofa_checkpoint_path = download_url(
-                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K357',
+                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K7',
                     model_dir='.torch/ofa_checkpoints/'
                 )
         else:
             if use_hvd:
                 args.ofa_checkpoint_path = download_url(
-                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D34_E6_K357',
+                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D34_E6_K7',
                     model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
                 )
             else:
                 args.ofa_checkpoint_path = download_url(
-                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D34_E6_K357',
+                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D34_E6_K7',
                     model_dir='.torch/ofa_checkpoints/'
                 )
         train_elastic_depth(train, run_manager, args, validate_func_dict)
