@@ -41,6 +41,7 @@ parser.add_argument(
 parser.add_argument(
     '--task', type=str, default='depth',
     choices=[
+        'basenet',
         'kernel',
         'depth',
         'expand',
@@ -61,7 +62,18 @@ args = parser.parse_args()
 args.experiment_folder = 'exp/exp_OFA' + args.net + '_' + args.dataset + '_' + args.experiment_id + '/'
 os.makedirs(args.experiment_folder, exist_ok=True)
 
-if args.task == 'kernel':
+if args.task == 'basenet':
+    args.target_path = args.experiment_folder + 'normal'
+    args.dynamic_batch_size = 1
+    args.n_epochs = 450
+    args.base_lr = 4e-2
+    args.warmup_epochs = 0
+    args.warmup_lr = -1
+    args.phase = 0
+    args.ks_list = '7'
+    args.expand_list = '6'
+    args.depth_list = '4'
+elif args.task == 'kernel':
     args.target_path = args.experiment_folder + 'normal2kernel'
     args.dynamic_batch_size = 1
     args.n_epochs = 120
@@ -148,12 +160,20 @@ args.dropout = 0.1
 args.base_stage_width = 'proxyless'
 
 args.width_mult_list = '1.0'
-args.dy_conv_scaling_mode = 1
 args.independent_distributed_sampling = False
 
-args.kd_ratio = 1.0
-args.kd_type = 'ce'
+if args.task == 'basenet':
+    args.dy_conv_scaling_mode = -1
+    args.kd_ratio = -1.0  # not using teacher model
+    args.teacher_model = None
+else:
+    args.dy_conv_scaling_mode = 1
+    args.kd_ratio = 1.0
+    args.kd_type = 'ce'
 
+if tiny_gpu:
+    args.image_size = '16'
+    args.base_batch_size = 8
 
 if __name__ == '__main__':
     os.makedirs(args.target_path, exist_ok=True)
@@ -296,7 +316,11 @@ if __name__ == '__main__':
                           'ks_list': sorted({min(args.ks_list), max(args.ks_list)}),
                           'expand_ratio_list': sorted({min(args.expand_list), max(args.expand_list)}),
                           'depth_list': sorted({min(net.depth_list), max(net.depth_list)})}
-    if args.task == 'kernel':
+    if args.task == 'basenet':
+        run_manager.train(
+            args, warmup_epochs=args.warmup_epochs, warmup_lr=args.warmup_lr
+        )
+    elif args.task == 'kernel':
         validate_func_dict['ks_list'] = sorted(args.ks_list)
         if run_manager.start_epoch == 0:
             if use_hvd:
