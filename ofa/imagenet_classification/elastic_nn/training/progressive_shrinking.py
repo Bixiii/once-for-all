@@ -7,6 +7,7 @@ import random
 import time
 import torch
 import torch.nn.functional as F
+import logging
 from tqdm import tqdm
 
 from ofa.utils import AverageMeter, cross_entropy_loss_with_soft_target
@@ -206,6 +207,7 @@ def load_models(run_manager, dynamic_net, model_path=None):
         dynamic_net = dynamic_net.module
     dynamic_net.load_state_dict(init)
     run_manager.write_log('Loaded init from %s' % model_path, 'valid')
+    logging.debug('Loaded model from %s' % model_path)
 
 
 def train_elastic_depth(train_func, run_manager, args, validate_func_dict):

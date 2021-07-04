@@ -6,6 +6,7 @@ import argparse
 import numpy as np
 import os
 import random
+import logging
 
 import torch
 
@@ -61,8 +62,19 @@ args = parser.parse_args()
 
 args.experiment_folder = 'exp/exp_OFA' + args.net + '_' + args.dataset + '_' + args.experiment_id + '/'
 os.makedirs(args.experiment_folder, exist_ok=True)
+logging.basicConfig(filename=args.experiment_folder+'program_flow.log', level=logging.DEBUG,
+                    format=('%(asctime)s  '
+                            '%(thread)-10d '
+                            '%(levelname)-8s '
+                            '%(filename)s: '
+                            '%(funcName)s(): '
+                            '%(lineno)-4d:\t'
+                            '%(message)s'))
+
+logging.info('***Initialized logger***')
 
 if args.task == 'basenet':
+    logging.info('Set parameter for training basenet')
     args.target_path = args.experiment_folder + 'normal'
     args.dynamic_batch_size = 1
     args.n_epochs = 450
@@ -74,6 +86,7 @@ if args.task == 'basenet':
     args.expand_list = '6'
     args.depth_list = '4'
 elif args.task == 'kernel':
+    logging.debug('Set parameter for training elastic kernel')
     args.target_path = args.experiment_folder + 'normal2kernel'
     args.dynamic_batch_size = 1
     args.n_epochs = 120
@@ -84,6 +97,7 @@ elif args.task == 'kernel':
     args.expand_list = '6'
     args.depth_list = '4'
 elif args.task == 'depth':
+    logging.debug('Set parameter for training elastic depth')
     args.target_path = args.experiment_folder + 'kernel2kernel_depth/phase%d' % args.phase
     args.dynamic_batch_size = 2
     if args.phase == 1:
@@ -103,6 +117,7 @@ elif args.task == 'depth':
         args.expand_list = '6'
         args.depth_list = '2,3,4'
 elif args.task == 'expand':
+    logging.debug('Set parameter for training elastic expand')
     args.target_path = args.experiment_folder + 'kernel_depth2kernel_depth_width/phase%d' % args.phase
     args.dynamic_batch_size = 4
     if args.phase == 1:
@@ -163,6 +178,7 @@ args.width_mult_list = '1.0'
 args.independent_distributed_sampling = False
 
 if args.task == 'basenet':
+    logging.debug('Disable teacher model')
     args.dy_conv_scaling_mode = -1
     args.kd_ratio = -1.0  # not using teacher model
     args.teacher_model = None
@@ -172,6 +188,7 @@ else:
     args.kd_type = 'ce'
 
 if tiny_gpu:
+    logging.info('Use tiny GPU mode')
     args.image_size = '16'
     args.base_batch_size = 8
 
@@ -180,12 +197,15 @@ if __name__ == '__main__':
 
     # Initialize Horovod
     if use_hvd:
+        logging.info('Init horovod')
         # os.environ['CUDA_VISIBLE_DEVICES'] = '1,0'
         hvd.init()
         # Pin GPU to be used to process local rank (one GPU per process)
         torch.cuda.set_device(hvd.local_rank())
         num_gpus = hvd.size()
+        logging.info('Available GPUs ' + str(num_gpus))
     elif torch.cuda.is_available():
+        logging.info('Disable horovod')
         torch.cuda.set_device('cuda:0')
         num_gpus = 1
 
@@ -194,13 +214,11 @@ if __name__ == '__main__':
             'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K7',
             model_dir='.torch/ofa_checkpoints/%d' % hvd.rank(),
         )
-        num_gpus = hvd.size()
     else:
         args.teacher_path = download_url(
             'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K7',
             model_dir='.torch/ofa_checkpoints/',
         )
-        num_gpus = 1
 
     torch.manual_seed(args.manual_seed)
     torch.cuda.manual_seed_all(args.manual_seed)
@@ -256,6 +274,7 @@ if __name__ == '__main__':
     args.depth_list = [int(d) for d in args.depth_list.split(',')]
 
     args.width_mult_list = args.width_mult_list[0] if len(args.width_mult_list) == 1 else args.width_mult_list
+    logging.debug('Build net from parameters')
     net = OFAMobileNetV3(
         n_classes=run_config.data_provider.n_classes,
         bn_param=(args.bn_momentum, args.bn_eps),
@@ -268,6 +287,7 @@ if __name__ == '__main__':
     )
     # teacher model
     if args.kd_ratio > 0:
+        logging.debug('Create teacher model')
         args.teacher_model = MobileNetV3Large(
             n_classes=run_config.data_provider.n_classes,
             bn_param=(args.bn_momentum, args.bn_eps),
@@ -282,6 +302,7 @@ if __name__ == '__main__':
     """ Distributed RunManager """
     # Horovod: (optional) compression algorithm.
     if use_hvd:
+        logging.debug('Create DistributedRunManger')
         compression = hvd.Compression.fp16 if args.fp16_allreduce else hvd.Compression.none
         run_manager = DistributedRunManager(
             args.target_path,
@@ -296,6 +317,7 @@ if __name__ == '__main__':
         # hvd broadcast
         run_manager.broadcast()
     else:
+        logging.debug('Create RunManger')
         run_manager = RunManager(
             args.target_path,
             net,
@@ -307,6 +329,7 @@ if __name__ == '__main__':
 
     # load teacher net weights
     if args.kd_ratio > 0:
+        logging.debug('Load teacher model weights')
         load_models(run_manager, args.teacher_model, model_path=args.teacher_path)
 
     # training
@@ -317,10 +340,12 @@ if __name__ == '__main__':
                           'expand_ratio_list': sorted({min(args.expand_list), max(args.expand_list)}),
                           'depth_list': sorted({min(net.depth_list), max(net.depth_list)})}
     if args.task == 'basenet':
+        logging.debug('Start training basenet')
         run_manager.train(
             args, warmup_epochs=args.warmup_epochs, warmup_lr=args.warmup_lr
         )
     elif args.task == 'kernel':
+        logging.info('Start training elastic kernel')
         validate_func_dict['ks_list'] = sorted(args.ks_list)
         if run_manager.start_epoch == 0:
             if use_hvd:
@@ -341,6 +366,7 @@ if __name__ == '__main__':
         train(run_manager, args,
               lambda _run_manager, epoch, is_test: validate(_run_manager, epoch, is_test, **validate_func_dict))
     elif args.task == 'depth':
+        logging.debug('Start training elastic depth (phase %d)' % args.phase)
         from ofa.imagenet_classification.elastic_nn.training.progressive_shrinking import train_elastic_depth
         if args.phase == 1:
             if use_hvd:
@@ -366,6 +392,7 @@ if __name__ == '__main__':
                 )
         train_elastic_depth(train, run_manager, args, validate_func_dict)
     elif args.task == 'expand':
+        logging.debug('Start training elastic expand (phase %d)' % args.phase)
         from ofa.imagenet_classification.elastic_nn.training.progressive_shrinking import train_elastic_expand
         if args.phase == 1:
             if use_hvd:
