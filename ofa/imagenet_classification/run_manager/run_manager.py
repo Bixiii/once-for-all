@@ -343,9 +343,9 @@ class RunManager:
                 end = time.time()
         return losses.avg, self.get_metric_vals(metric_dict)
 
-    def train(self, args, warmup_epoch=0, warmup_lr=0):
-        for epoch in range(self.start_epoch, self.run_config.n_epochs + warmup_epoch):
-            train_loss, (train_top1, train_top5) = self.train_one_epoch(args, epoch, warmup_epoch, warmup_lr)
+    def train(self, args, warmup_epochs=0, warmup_lr=0):
+        for epoch in range(self.start_epoch, self.run_config.n_epochs + warmup_epochs):
+            train_loss, (train_top1, train_top5) = self.train_one_epoch(args, epoch, warmup_epochs, warmup_lr)
 
             if (epoch + 1) % self.run_config.validation_frequency == 0:
                 img_size, val_loss, val_acc, val_acc5 = self.validate_all_resolution(epoch=epoch, is_test=False)
@@ -353,7 +353,7 @@ class RunManager:
                 is_best = np.mean(val_acc) > self.best_acc
                 self.best_acc = max(self.best_acc, np.mean(val_acc))
                 val_log = 'Valid [{0}/{1}]\tloss {2:.3f}\t{5} {3:.3f} ({4:.3f})'. \
-                    format(epoch + 1 - warmup_epoch, self.run_config.n_epochs,
+                    format(epoch + 1 - warmup_epochs, self.run_config.n_epochs,
                            np.mean(val_loss), np.mean(val_acc), self.best_acc, self.get_metric_names()[0])
                 val_log += '\t{2} {0:.3f}\tTrain {1} {top1:.3f}\tloss {train_loss:.3f}\t'. \
                     format(np.mean(val_acc5), *self.get_metric_names(), top1=train_top1, train_loss=train_loss)
