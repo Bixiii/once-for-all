@@ -224,7 +224,7 @@ def train_elastic_depth(train_func, run_manager, args, validate_func_dict):
     if run_manager.start_epoch == 0 and not args.resume:
         validate_func_dict['depth_list'] = sorted(dynamic_net.depth_list)
 
-        load_models(run_manager, dynamic_net, model_path=args.ofa_checkpoint_path)
+        load_models(run_manager, dynamic_net, model_path=args.source_path)
         # validate after loading weights
         run_manager.write_log('%.3f\t%.3f\t%.3f\t%s' %
                               validate(run_manager, is_test=True, **validate_func_dict), 'valid')
@@ -262,7 +262,7 @@ def train_elastic_expand(train_func, run_manager, args, validate_func_dict):
     if run_manager.start_epoch == 0 and not args.resume:
         validate_func_dict['expand_ratio_list'] = sorted(dynamic_net.expand_ratio_list)
 
-        load_models(run_manager, dynamic_net, model_path=args.ofa_checkpoint_path)
+        load_models(run_manager, dynamic_net, model_path=args.source_path)
         dynamic_net.re_organize_middle_weights(expand_ratio_stage=current_stage)
         run_manager.write_log('%.3f\t%.3f\t%.3f\t%s' %
                               validate(run_manager, is_test=True, **validate_func_dict), 'valid')
@@ -296,7 +296,7 @@ def train_elastic_width_mult(train_func, run_manager, args, validate_func_dict):
     current_stage = n_stages - 1
 
     if run_manager.start_epoch == 0 and not args.resume:
-        load_models(run_manager, dynamic_net, model_path=args.ofa_checkpoint_path)
+        load_models(run_manager, dynamic_net, model_path=args.source_path)
         if current_stage == 0:
             dynamic_net.re_organize_middle_weights(expand_ratio_stage=len(dynamic_net.expand_ratio_list) - 1)
             run_manager.write_log('reorganize_middle_weights (expand_ratio_stage=%d)'

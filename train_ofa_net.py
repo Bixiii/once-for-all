@@ -40,6 +40,9 @@ parser.add_argument(
     ]
 )
 parser.add_argument(
+    '--pretrained', type=bool, default=False
+)
+parser.add_argument(
     '--task', type=str, default='depth',
     choices=[
         'basenet',
@@ -87,7 +90,20 @@ if args.task == 'basenet':
     args.depth_list = '4'
 elif args.task == 'kernel':
     logging.debug('Set parameter for training elastic kernel')
-    args.target_path = args.experiment_folder + 'normal2kernel'
+    if args.pretrained:
+        if use_hvd:
+            args.source_path = download_url(
+                'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K7',
+                model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
+            )
+        else:
+            args.source_path = download_url(
+                'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K7',
+                model_dir='.torch/ofa_checkpoints/'
+            )
+    else:
+        args.source_path = args.experiment_folder + 'normal/checkpoint/model_best.pth.tar'
+    args.target_path = args.experiment_folder + 'normal-2-kernel'
     args.dynamic_batch_size = 1
     args.n_epochs = 120
     args.base_lr = 3e-2
@@ -98,9 +114,22 @@ elif args.task == 'kernel':
     args.depth_list = '4'
 elif args.task == 'depth':
     logging.debug('Set parameter for training elastic depth')
-    args.target_path = args.experiment_folder + 'kernel2kernel_depth/phase%d' % args.phase
+    args.target_path = args.experiment_folder + 'kernel-2-kernel_depth/phase%d' % args.phase
     args.dynamic_batch_size = 2
     if args.phase == 1:
+        if args.pretrained:
+            if use_hvd:
+                args.source_path = download_url(
+                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K357',
+                    model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
+                )
+            else:
+                args.source_path = download_url(
+                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K357',
+                    model_dir='.torch/ofa_checkpoints/'
+                )
+        else:
+            args.source_path = args.experiment_folder + 'normal-2-kernel/checkpoint/model_best.pth.tar'
         args.n_epochs = 25
         args.base_lr = 2.5e-3
         args.warmup_epochs = 0
@@ -109,6 +138,19 @@ elif args.task == 'depth':
         args.expand_list = '6'
         args.depth_list = '3,4'
     else:
+        if args.pretrained:
+            if use_hvd:
+                args.source_path = download_url(
+                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D34_E6_K357',
+                    model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
+                )
+            else:
+                args.source_path = download_url(
+                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D34_E6_K357',
+                    model_dir='.torch/ofa_checkpoints/'
+                )
+        else:
+            args.source_path = args.experiment_folder + 'kernel-2-kernel_depth/phase1/checkpoint/model_best.pth.tar'
         args.n_epochs = 120
         args.base_lr = 7.5e-3
         args.warmup_epochs = 5
@@ -118,9 +160,22 @@ elif args.task == 'depth':
         args.depth_list = '2,3,4'
 elif args.task == 'expand':
     logging.debug('Set parameter for training elastic expand')
-    args.target_path = args.experiment_folder + 'kernel_depth2kernel_depth_width/phase%d' % args.phase
+    args.target_path = args.experiment_folder + 'kernel_depth-2-kernel_depth_expand/phase%d' % args.phase
     args.dynamic_batch_size = 4
     if args.phase == 1:
+        if args.pretrained:
+            if use_hvd:
+                args.source_path = download_url(
+                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D234_E6_K357',
+                    model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
+                )
+            else:
+                args.source_path = download_url(
+                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D234_E6_K357',
+                    model_dir='.torch/ofa_checkpoints/'
+                )
+        else:
+            args.source_path = args.experiment_folder + 'kernel-2-kernel_depth/phase2/checkpoint/model_best.pth.tar'
         args.n_epochs = 25
         args.base_lr = 2.5e-3
         args.warmup_epochs = 0
@@ -129,6 +184,19 @@ elif args.task == 'expand':
         args.expand_list = '4,6'
         args.depth_list = '2,3,4'
     else:
+        if args.pretrained:
+            if use_hvd:
+                args.source_path = download_url(
+                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D234_E46_K357',
+                    model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
+                )
+            else:
+                args.source_path = download_url(
+                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D234_E46_K357',
+                    model_dir='.torch/ofa_checkpoints/'
+                )
+        else:
+            args.source_path = args.experiment_folder + 'kernel_depth-2-kernel_depth_expand/phase1/checkpoint/model_best.pth.tar'
         args.n_epochs = 120
         args.base_lr = 7.5e-3
         args.warmup_epochs = 5
@@ -208,18 +276,11 @@ if __name__ == '__main__':
         logging.info('Disable horovod')
         torch.cuda.set_device('cuda:0')
         num_gpus = 1
-
-    if use_hvd:
-        args.teacher_path = download_url(
-            'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K7',
-            model_dir='.torch/ofa_checkpoints/%d' % hvd.rank(),
-        )
     else:
-        args.teacher_path = download_url(
-            'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K7',
-            model_dir='.torch/ofa_checkpoints/',
-        )
+        logging.error('Need GPU to run OFA Training')
+        raise EnvironmentError
 
+    # Set up torch and cuda
     torch.manual_seed(args.manual_seed)
     torch.cuda.manual_seed_all(args.manual_seed)
     np.random.seed(args.manual_seed)
@@ -328,8 +389,22 @@ if __name__ == '__main__':
         run_manager.save_config()
 
     # load teacher net weights
+    if args.pretrained:
+        if use_hvd:
+            args.teacher_path = download_url(
+                'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K7',
+                model_dir='.torch/ofa_checkpoints/%d' % hvd.rank(),
+            )
+        else:
+            args.teacher_path = download_url(
+                'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K7',
+                model_dir='.torch/ofa_checkpoints/',
+            )
+    else:
+        args.teacher_path = args.experiment_folder + 'normal/checkpoint/model_best.pth.tar'
+
     if args.kd_ratio > 0:
-        logging.debug('Load teacher model weights')
+        logging.debug('Load teacher model')
         load_models(run_manager, args.teacher_model, model_path=args.teacher_path)
 
     # training
@@ -348,17 +423,7 @@ if __name__ == '__main__':
         logging.info('Start training elastic kernel')
         validate_func_dict['ks_list'] = sorted(args.ks_list)
         if run_manager.start_epoch == 0:
-            if use_hvd:
-                args.ofa_checkpoint_path = download_url(
-                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K7',
-                    model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
-                )
-            else:
-                args.ofa_checkpoint_path = download_url(
-                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K7',
-                    model_dir='.torch/ofa_checkpoints/'
-                )
-            load_models(run_manager, run_manager.net, args.ofa_checkpoint_path)
+            load_models(run_manager, run_manager.net, args.source_path)
             run_manager.write_log(
                 '%.3f\t%.3f\t%.3f\t%s' % validate(run_manager, is_test=True, **validate_func_dict), 'valid')
         else:
@@ -368,54 +433,10 @@ if __name__ == '__main__':
     elif args.task == 'depth':
         logging.debug('Start training elastic depth (phase %d)' % args.phase)
         from ofa.imagenet_classification.elastic_nn.training.progressive_shrinking import train_elastic_depth
-        if args.phase == 1:
-            if use_hvd:
-                args.ofa_checkpoint_path = download_url(
-                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K357',
-                    model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
-                )
-            else:
-                args.ofa_checkpoint_path = download_url(
-                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K357',
-                    model_dir='.torch/ofa_checkpoints/'
-                )
-        else:
-            if use_hvd:
-                args.ofa_checkpoint_path = download_url(
-                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D34_E6_K357',
-                    model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
-                )
-            else:
-                args.ofa_checkpoint_path = download_url(
-                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D34_E6_K357',
-                    model_dir='.torch/ofa_checkpoints/'
-                )
         train_elastic_depth(train, run_manager, args, validate_func_dict)
     elif args.task == 'expand':
         logging.debug('Start training elastic expand (phase %d)' % args.phase)
         from ofa.imagenet_classification.elastic_nn.training.progressive_shrinking import train_elastic_expand
-        if args.phase == 1:
-            if use_hvd:
-                args.ofa_checkpoint_path = download_url(
-                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D234_E6_K357',
-                    model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
-                )
-            else:
-                args.ofa_checkpoint_path = download_url(
-                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D234_E6_K357',
-                    model_dir='.torch/ofa_checkpoints/'
-                )
-        else:
-            if use_hvd:
-                args.ofa_checkpoint_path = download_url(
-                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D234_E46_K357',
-                    model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
-                )
-            else:
-                args.ofa_checkpoint_path = download_url(
-                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D234_E46_K357',
-                    model_dir='.torch/ofa_checkpoints/'
-                )
         train_elastic_expand(train, run_manager, args, validate_func_dict)
     else:
         raise NotImplementedError
