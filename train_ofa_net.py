@@ -76,6 +76,23 @@ logging.basicConfig(filename=args.experiment_folder+'program_flow.log', level=lo
 
 logging.info('***Initialized logger***')
 
+# Initialize Horovod
+if use_hvd:
+    logging.info('Init horovod')
+    # os.environ['CUDA_VISIBLE_DEVICES'] = '1,0'
+    hvd.init()
+    # Pin GPU to be used to process local rank (one GPU per process)
+    torch.cuda.set_device(hvd.local_rank())
+    num_gpus = hvd.size()
+    logging.info('Available GPUs ' + str(num_gpus))
+elif torch.cuda.is_available():
+    logging.info('Disable horovod')
+    torch.cuda.set_device('cuda:0')
+    num_gpus = 1
+else:
+    logging.error('Need GPU to run OFA Training')
+    raise EnvironmentError
+
 if args.task == 'basenet':
     logging.info('Set parameter for training basenet')
     args.target_path = args.experiment_folder + 'normal'
@@ -262,23 +279,6 @@ if tiny_gpu:
 
 if __name__ == '__main__':
     os.makedirs(args.target_path, exist_ok=True)
-
-    # Initialize Horovod
-    if use_hvd:
-        logging.info('Init horovod')
-        # os.environ['CUDA_VISIBLE_DEVICES'] = '1,0'
-        hvd.init()
-        # Pin GPU to be used to process local rank (one GPU per process)
-        torch.cuda.set_device(hvd.local_rank())
-        num_gpus = hvd.size()
-        logging.info('Available GPUs ' + str(num_gpus))
-    elif torch.cuda.is_available():
-        logging.info('Disable horovod')
-        torch.cuda.set_device('cuda:0')
-        num_gpus = 1
-    else:
-        logging.error('Need GPU to run OFA Training')
-        raise EnvironmentError
 
     # Set up torch and cuda
     torch.manual_seed(args.manual_seed)
