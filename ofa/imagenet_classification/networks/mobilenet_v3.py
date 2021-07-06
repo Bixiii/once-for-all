@@ -152,10 +152,27 @@ class MobileNetV3(MyNetwork):
 
         for key in state_dict:
             if key not in current_state_dict:
-                assert '.mobile_inverted_conv.' in key
                 new_key = key.replace('.mobile_inverted_conv.', '.conv.')
             else:
                 new_key = key
+            if new_key in current_state_dict:
+                pass
+            elif '.bn.bn.' in new_key:
+                new_key = new_key.replace('.bn.bn.', '.bn.')
+            elif '.conv.conv.weight' in new_key:
+                new_key = new_key.replace('.conv.conv.weight', '.conv.weight')
+            elif '.linear.linear.' in new_key:
+                new_key = new_key.replace('.linear.linear.', '.linear.')
+            ##############################################################################
+            elif '.linear.' in new_key:
+                new_key = new_key.replace('.linear.', '.linear.linear.')
+            elif 'bn.' in new_key:
+                new_key = new_key.replace('bn.', 'bn.bn.')
+            elif 'conv.weight' in new_key:
+                new_key = new_key.replace('conv.weight', 'conv.conv.weight')
+            else:
+                raise ValueError(new_key)
+            assert new_key in current_state_dict, '%s' % new_key
             current_state_dict[new_key] = state_dict[key]
         super(MobileNetV3, self).load_state_dict(current_state_dict)
 
