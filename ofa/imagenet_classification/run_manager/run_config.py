@@ -3,7 +3,7 @@
 # International Conference on Learning Representations (ICLR), 2020.
 
 from ofa.utils import calc_learning_rate, build_optimizer
-from ofa.imagenet_classification.data_providers import ImagenetDataProvider
+from ofa.imagenet_classification.data_providers import ImagenetDataProvider, Cifar10DataProvider
 
 __all__ = ['RunConfig', 'ImagenetRunConfig', 'DistributedImageNetRunConfig']
 
@@ -11,7 +11,7 @@ __all__ = ['RunConfig', 'ImagenetRunConfig', 'DistributedImageNetRunConfig']
 class RunConfig:
 
     def __init__(self, n_epochs, init_lr, lr_schedule_type, lr_schedule_param,
-                 dataset, train_batch_size, test_batch_size, valid_size,
+                 dataset, data_path, train_batch_size, test_batch_size, valid_size,
                  opt_type, opt_param, weight_decay, label_smoothing, no_decay_keys,
                  mixup_alpha, model_init, validation_frequency, print_frequency):
         self.n_epochs = n_epochs
@@ -20,6 +20,7 @@ class RunConfig:
         self.lr_schedule_param = lr_schedule_param
 
         self.dataset = dataset
+        self.data_path = data_path
         self.train_batch_size = train_batch_size
         self.test_batch_size = test_batch_size
         self.valid_size = valid_size
@@ -94,13 +95,13 @@ class RunConfig:
 class ImagenetRunConfig(RunConfig):
 
     def __init__(self, n_epochs=150, init_lr=0.05, lr_schedule_type='cosine', lr_schedule_param=None,
-                 dataset='imagenet', train_batch_size=256, test_batch_size=500, valid_size=None,
+                 dataset='imagenet', data_path=None, train_batch_size=256, test_batch_size=500, valid_size=None,
                  opt_type='sgd', opt_param=None, weight_decay=4e-5, label_smoothing=0.1, no_decay_keys=None,
                  mixup_alpha=None, model_init='he_fout', validation_frequency=1, print_frequency=10,
-                 n_worker=32, resize_scale=0.08, distort_color='tf', image_size=224, data_path=None, **kwargs):
+                 n_worker=32, resize_scale=0.08, distort_color='tf', image_size=224, **kwargs):
         super(ImagenetRunConfig, self).__init__(
             n_epochs, init_lr, lr_schedule_type, lr_schedule_param,
-            dataset, train_batch_size, test_batch_size, valid_size,
+            dataset, data_path, train_batch_size, test_batch_size, valid_size,
             opt_type, opt_param, weight_decay, label_smoothing, no_decay_keys,
             mixup_alpha,
             model_init, validation_frequency, print_frequency
@@ -110,13 +111,14 @@ class ImagenetRunConfig(RunConfig):
         self.resize_scale = resize_scale
         self.distort_color = distort_color
         self.image_size = image_size
-        self.data_path = data_path
 
     @property
     def data_provider(self):
         if self.__dict__.get('_data_provider', None) is None:
             if self.dataset == ImagenetDataProvider.name():
                 DataProviderClass = ImagenetDataProvider
+            elif self.dataset == Cifar10DataProvider.name():
+                DataProviderClass = Cifar10DataProvider
             else:
                 raise NotImplementedError
             self.__dict__['_data_provider'] = DataProviderClass(
@@ -130,17 +132,17 @@ class ImagenetRunConfig(RunConfig):
 class DistributedImageNetRunConfig(ImagenetRunConfig):
 
     def __init__(self, n_epochs=150, init_lr=0.05, lr_schedule_type='cosine', lr_schedule_param=None,
-                 dataset='imagenet', train_batch_size=64, test_batch_size=64, valid_size=None,
+                 dataset='imagenet', data_path=None, train_batch_size=64, test_batch_size=64, valid_size=None,
                  opt_type='sgd', opt_param=None, weight_decay=4e-5, label_smoothing=0.1, no_decay_keys=None,
                  mixup_alpha=None, model_init='he_fout', validation_frequency=1, print_frequency=10,
-                 n_worker=8, resize_scale=0.08, distort_color='tf', image_size=224, data_path=None,
+                 n_worker=8, resize_scale=0.08, distort_color='tf', image_size=224,
                  **kwargs):
         super(DistributedImageNetRunConfig, self).__init__(
             n_epochs, init_lr, lr_schedule_type, lr_schedule_param,
-            dataset, train_batch_size, test_batch_size, valid_size,
+            dataset, data_path, train_batch_size, test_batch_size, valid_size,
             opt_type, opt_param, weight_decay, label_smoothing, no_decay_keys,
             mixup_alpha, model_init, validation_frequency, print_frequency, n_worker, resize_scale, distort_color,
-            image_size, data_path, **kwargs
+            image_size, **kwargs
         )
 
         self._num_replicas = kwargs['num_replicas']
@@ -151,6 +153,8 @@ class DistributedImageNetRunConfig(ImagenetRunConfig):
         if self.__dict__.get('_data_provider', None) is None:
             if self.dataset == ImagenetDataProvider.name():
                 DataProviderClass = ImagenetDataProvider
+            elif self.dataset == Cifar10DataProvider.name():
+                DataProviderClass = Cifar10DataProvider
             else:
                 raise NotImplementedError
             self.__dict__['_data_provider'] = DataProviderClass(

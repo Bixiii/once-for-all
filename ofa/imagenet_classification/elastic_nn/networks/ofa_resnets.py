@@ -12,7 +12,7 @@ __all__ = ['OFAResNets']
 class OFAResNets(ResNets):
 
     def __init__(self, n_classes=1000, bn_param=(0.1, 1e-5), dropout_rate=0,
-                 depth_list=2, expand_ratio_list=0.25, width_mult_list=1.0, small_input_stem=False):
+                 depth_list=2, expand_ratio_list=0.25, width_mult_list=1.0, small_input_stem=False, dataset='imagenet'):
 
         self.depth_list = val2list(depth_list)
         self.expand_ratio_list = val2list(expand_ratio_list)
@@ -22,6 +22,7 @@ class OFAResNets(ResNets):
         self.depth_list.sort()
         self.expand_ratio_list.sort()
         self.width_mult_list.sort()
+        self.dataset = dataset
 
         input_channel = [
             make_divisible(64 * width_mult, MyNetwork.CHANNEL_DIVISIBLE) for width_mult in self.width_mult_list
@@ -39,11 +40,23 @@ class OFAResNets(ResNets):
         n_block_list = [base_depth + max(self.depth_list) for base_depth in ResNets.BASE_DEPTH_LIST]
         stride_list = [1, 2, 2, 2]
 
+        if dataset == 'imagenet':
+            input_stem_kernel_size = 7
+            input_stem_stride = 2
+            max_pooling = True
+            downsample_mode = 'avgpool_conv'
+        elif dataset == 'cifar10':
+            input_stem_kernel_size = 3
+            input_stem_stride = 1
+            max_pooling = False
+            downsample_mode = 'conv'
+
         # build input stem
         if small_input_stem:
             input_stem = [
-                DynamicConvLayer(val2list(3), input_channel, 7, stride=2, use_bn=True, act_func='relu'),
+                DynamicConvLayer(val2list(3), input_channel, input_stem_kernel_size, stride=input_stem_stride, use_bn=True, act_func='relu'),
             ]
+            downsample_mode = 'conv'
         else:
             input_stem = [
                 DynamicConvLayer(val2list(3), mid_input_channel, 3, stride=2, use_bn=True, act_func='relu'),
@@ -61,14 +74,14 @@ class OFAResNets(ResNets):
                 stride = s if i == 0 else 1
                 bottleneck_block = DynamicResNetBottleneckBlock(
                     input_channel, width, expand_ratio_list=self.expand_ratio_list,
-                    kernel_size=3, stride=stride, act_func='relu', downsample_mode='conv',  # Inital imp was avgpool_conv
+                    kernel_size=3, stride=stride, act_func='relu', downsample_mode=downsample_mode,
                 )
                 blocks.append(bottleneck_block)
                 input_channel = width
         # classifier
         classifier = DynamicLinearLayer(input_channel, n_classes, dropout_rate=dropout_rate)
 
-        super(OFAResNets, self).__init__(input_stem, blocks, classifier)
+        super(OFAResNets, self).__init__(input_stem, blocks, classifier, max_pooling=max_pooling)
 
         # set bn param
         self.set_bn_param(*bn_param)
@@ -92,7 +105,8 @@ class OFAResNets(ResNets):
                 pass
             else:
                 x = layer(x)
-        x = self.max_pooling(x)
+        if self.max_pooling:
+            x = self.max_pooling(x)
         for stage_id, block_idx in enumerate(self.grouped_block_index):
             depth_param = self.runtime_depth[stage_id]
             active_idx = block_idx[:len(block_idx) - depth_param]
@@ -111,7 +125,8 @@ class OFAResNets(ResNets):
                 pass
             else:
                 _str += layer.module_str + '\n'
-        _str += 'max_pooling(ks=3, stride=2)\n'
+        if self.max_pooling:
+            _str += 'max_pooling(ks=3, stride=2)\n'
         for stage_id, block_idx in enumerate(self.grouped_block_index):
             depth_param = self.runtime_depth[stage_id]
             active_idx = block_idx[:len(block_idx) - depth_param]

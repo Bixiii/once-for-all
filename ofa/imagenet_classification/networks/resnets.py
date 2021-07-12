@@ -12,11 +12,14 @@ class ResNets(MyNetwork):
     BASE_DEPTH_LIST = [2, 2, 4, 2]
     STAGE_WIDTH_LIST = [256, 512, 1024, 2048]
 
-    def __init__(self, input_stem, blocks, classifier):
+    def __init__(self, input_stem, blocks, classifier, max_pooling=True):
         super(ResNets, self).__init__()
 
         self.input_stem = nn.ModuleList(input_stem)
-        self.max_pooling = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, dilation=1, ceil_mode=False)
+        if max_pooling:
+            self.max_pooling = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, dilation=1, ceil_mode=False)
+        else:
+            self.max_pooling = None
         self.blocks = nn.ModuleList(blocks)
         self.global_avg_pool = MyGlobalAvgPool2d(keep_dim=False)
         self.classifier = classifier
@@ -24,7 +27,8 @@ class ResNets(MyNetwork):
     def forward(self, x):
         for layer in self.input_stem:
             x = layer(x)
-        x = self.max_pooling(x)
+        if self.max_pooling:
+            x = self.max_pooling(x)
         for block in self.blocks:
             x = block(x)
         x = self.global_avg_pool(x)
@@ -36,7 +40,8 @@ class ResNets(MyNetwork):
         _str = ''
         for layer in self.input_stem:
             _str += layer.module_str + '\n'
-        _str += 'max_pooling(ks=3, stride=2)\n'
+        if self.max_pooling:
+            _str += 'max_pooling(ks=3, stride=2)\n'
         for block in self.blocks:
             _str += block.module_str + '\n'
         _str += self.global_avg_pool.__repr__() + '\n'
@@ -116,7 +121,7 @@ class ResNets(MyNetwork):
 class ResNet50(ResNets):
 
     def __init__(self, n_classes=1000, width_mult=1.0, bn_param=(0.1, 1e-5), dropout_rate=0,
-                 expand_ratio=None, depth_param=None, depth_list=None):
+                 expand_ratio=None, depth_param=None, depth_list=None, dataset=None):
 
         expand_ratio = 0.25 if expand_ratio is None else expand_ratio
 
@@ -135,9 +140,12 @@ class ResNet50(ResNets):
 
         stride_list = [1, 2, 2, 2]
 
+        input_stem_kernel_size = 3 if dataset == 'cifar10' else 7
+        input_stem_stride = 1 if dataset == 'cifar10' else 2
+
         # build input stem
         input_stem = [ConvLayer(
-            3, input_channel, kernel_size=7, stride=2, use_bn=True, act_func='relu', ops_order='weight_bn_act',
+            3, input_channel, kernel_size=input_stem_kernel_size, stride=input_stem_stride, use_bn=True, act_func='relu', ops_order='weight_bn_act',
         )]
 
         # blocks
@@ -154,7 +162,7 @@ class ResNet50(ResNets):
         # classifier
         classifier = LinearLayer(input_channel, n_classes, dropout_rate=dropout_rate)
 
-        super(ResNet50, self).__init__(input_stem, blocks, classifier)
+        super(ResNet50, self).__init__(input_stem, blocks, classifier, max_pooling=(dataset != 'cifar10'))
 
         # set bn param
         self.set_bn_param(*bn_param)

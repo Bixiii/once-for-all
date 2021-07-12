@@ -27,7 +27,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     '--dataset', type=str, default='imagenet',
     choices=[
-        'imagenet',
+        'imagenet', 'cifar10'
     ]
 )
 parser.add_argument(
@@ -97,12 +97,16 @@ else:
     logging.error('Need GPU to run OFA Training')
     raise EnvironmentError
 
+args.image_size = None
 if args.task == 'basenet':
     logging.info('Set parameter for training basenet')
     args.target_path = args.experiment_folder + 'normal'
     args.dynamic_batch_size = 1
     args.n_epochs = 450
-    args.base_lr = 4e-2
+    if args.dataset == 'imagenet':
+        args.base_lr = 4e-2
+    elif args.dataset == 'cifar10':
+        args.base_lr = 8e-2
     args.warmup_epochs = 0
     args.warmup_lr = -1
     args.phase = 0
@@ -272,10 +276,6 @@ args.valid_size = None  # 10000 for imagnet
 
 args.opt_type = 'sgd'
 args.momentum = 0.9
-args.no_nesterov = False
-args.weight_decay = 3e-5
-args.label_smoothing = 0.1
-args.no_decay_keys = 'bn#bias'
 args.fp16_allreduce = False
 
 args.model_init = 'he_fout'
@@ -283,11 +283,31 @@ args.validation_frequency = 1
 args.print_frequency = 10
 
 args.n_worker = 8
-args.resize_scale = 0.08
-args.distort_color = 'tf'
-args.image_size = '128,160,192,224'
-args.continuous_size = True
-args.not_sync_distributed_image_size = False
+
+if args.dataset == 'imagenet':
+    args.resize_scale = 0.08
+    args.distort_color = 'tf'
+    if args.image_size is None:
+        args.image_size = '128,160,192,224'
+    args.continuous_size = True
+    args.not_sync_distributed_image_size = False
+    args.base_batch_size = 64
+    args.no_nesterov = False
+    args.weight_decay = 3e-5
+    args.label_smoothing = 0.1
+    args.no_decay_keys = 'bn#bias'
+elif args.dataset == 'cifar10':
+    args.resize_scale = 1
+    args.distort_color = None
+    if args.image_size is None:
+        args.image_size = '32'
+    args.continuous_size = True
+    args.not_sync_distributed_image_size = False
+    args.base_batch_size = 128
+    args.no_nesterov = True
+    args.weight_decay = 5e-4
+    args.label_smoothing = 0
+    args.no_decay_keys = None
 
 # comment describing current experiment
 comment = '_pt_' + 'OFA' + args.net + '-' + args.task + str(args.phase) + '_' + str(args.image_size) + 'x' + \
@@ -392,6 +412,7 @@ if __name__ == '__main__':
             depth_list=args.depth_list,
         )
     elif args.net == 'ResNet50':
+        small_input_stem = True if args.dataset == 'cifar10' else False
         net = OFAResNets(
             n_classes=run_config.data_provider.n_classes,
             bn_param=(args.bn_momentum, args.bn_eps),
@@ -399,7 +420,8 @@ if __name__ == '__main__':
             expand_ratio_list=args.expand_list,
             depth_list=args.depth_list,
             width_mult_list=args.width_mult_list,
-            small_input_stem=True
+            small_input_stem=small_input_stem,
+            dataset=args.dataset
         )
 
     # teacher model
@@ -422,7 +444,8 @@ if __name__ == '__main__':
                 dropout_rate=args.dropout,
                 width_mult=1.0,
                 expand_ratio=0.35,
-                depth_list=[4, 4, 6, 4]
+                depth_list=[4, 4, 6, 4],
+                dataset=args.dataset
             )
         args.teacher_model.cuda()
 
@@ -476,7 +499,7 @@ if __name__ == '__main__':
     # training
     from ofa.imagenet_classification.elastic_nn.training.progressive_shrinking import validate, train
 
-    validate_func_dict = {'image_size_list': {224} if isinstance(args.image_size, int) else sorted({160, 224}),
+    validate_func_dict = {'image_size_list': {args.image_size} if isinstance(args.image_size, int) else sorted({min(args.img_size), max(args.img_size)}),
                           'ks_list': sorted({min(args.ks_list), max(args.ks_list)}),
                           'expand_ratio_list': sorted({min(args.expand_list), max(args.expand_list)}),
                           'depth_list': sorted({min(net.depth_list), max(net.depth_list)})}
