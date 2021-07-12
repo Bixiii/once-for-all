@@ -12,11 +12,12 @@ __all__ = ['OFAResNets']
 class OFAResNets(ResNets):
 
     def __init__(self, n_classes=1000, bn_param=(0.1, 1e-5), dropout_rate=0,
-                 depth_list=2, expand_ratio_list=0.25, width_mult_list=1.0):
+                 depth_list=2, expand_ratio_list=0.25, width_mult_list=1.0, small_input_stem=False):
 
         self.depth_list = val2list(depth_list)
         self.expand_ratio_list = val2list(expand_ratio_list)
         self.width_mult_list = val2list(width_mult_list)
+        self.small_input_stem = small_input_stem
         # sort
         self.depth_list.sort()
         self.expand_ratio_list.sort()
@@ -39,14 +40,19 @@ class OFAResNets(ResNets):
         stride_list = [1, 2, 2, 2]
 
         # build input stem
-        input_stem = [
-            DynamicConvLayer(val2list(3), mid_input_channel, 3, stride=2, use_bn=True, act_func='relu'),
-            ResidualBlock(
-                DynamicConvLayer(mid_input_channel, mid_input_channel, 3, stride=1, use_bn=True, act_func='relu'),
-                IdentityLayer(mid_input_channel, mid_input_channel)
-            ),
-            DynamicConvLayer(mid_input_channel, input_channel, 3, stride=1, use_bn=True, act_func='relu')
-        ]
+        if small_input_stem:
+            input_stem = [
+                DynamicConvLayer(val2list(3), input_channel, 7, stride=2, use_bn=True, act_func='relu'),
+            ]
+        else:
+            input_stem = [
+                DynamicConvLayer(val2list(3), mid_input_channel, 3, stride=2, use_bn=True, act_func='relu'),
+                ResidualBlock(
+                    DynamicConvLayer(mid_input_channel, mid_input_channel, 3, stride=1, use_bn=True, act_func='relu'),
+                    IdentityLayer(mid_input_channel, mid_input_channel)
+                ),
+                DynamicConvLayer(mid_input_channel, input_channel, 3, stride=1, use_bn=True, act_func='relu')
+            ]
 
         # blocks
         blocks = []
@@ -55,7 +61,7 @@ class OFAResNets(ResNets):
                 stride = s if i == 0 else 1
                 bottleneck_block = DynamicResNetBottleneckBlock(
                     input_channel, width, expand_ratio_list=self.expand_ratio_list,
-                    kernel_size=3, stride=stride, act_func='relu', downsample_mode='avgpool_conv',
+                    kernel_size=3, stride=stride, act_func='relu', downsample_mode='conv',  # Inital imp was avgpool_conv
                 )
                 blocks.append(bottleneck_block)
                 input_channel = width
@@ -165,11 +171,12 @@ class OFAResNets(ResNets):
             if e is not None:
                 block.active_expand_ratio = e
 
-        if width_mult[0] is not None:
-            self.input_stem[1].conv.active_out_channel = self.input_stem[0].active_out_channel = \
-                self.input_stem[0].out_channel_list[width_mult[0]]
-        if width_mult[1] is not None:
-            self.input_stem[2].active_out_channel = self.input_stem[2].out_channel_list[width_mult[1]]
+        if not self.small_input_stem:
+            if width_mult[0] is not None:
+                self.input_stem[1].conv.active_out_channel = self.input_stem[0].active_out_channel = \
+                    self.input_stem[0].out_channel_list[width_mult[0]]
+            if width_mult[1] is not None:
+                self.input_stem[2].active_out_channel = self.input_stem[2].out_channel_list[width_mult[1]]
 
         if depth[0] is not None:
             self.input_stem_skipping = (depth[0] != max(self.depth_list))
@@ -192,10 +199,16 @@ class OFAResNets(ResNets):
             depth_setting.append(random.choice(self.depth_list))
 
         # sample width_mult
-        width_mult_setting = [
-            random.choice(list(range(len(self.input_stem[0].out_channel_list)))),
-            random.choice(list(range(len(self.input_stem[2].out_channel_list)))),
-        ]
+        if not self.small_input_stem:
+            width_mult_setting = [
+                random.choice(list(range(len(self.input_stem[0].out_channel_list)))),
+                random.choice(list(range(len(self.input_stem[2].out_channel_list)))),
+            ]
+        else:
+            width_mult_setting = [
+                random.choice(list(range(len(self.input_stem[0].out_channel_list)))),
+            ]
+
         for stage_id, block_idx in enumerate(self.grouped_block_index):
             stage_first_block = self.blocks[block_idx[0]]
             width_mult_setting.append(
@@ -212,13 +225,16 @@ class OFAResNets(ResNets):
 
     def get_active_subnet(self, preserve_weight=True):
         input_stem = [self.input_stem[0].get_active_subnet(3, preserve_weight)]
-        if self.input_stem_skipping <= 0:
-            input_stem.append(ResidualBlock(
-                self.input_stem[1].conv.get_active_subnet(self.input_stem[0].active_out_channel, preserve_weight),
-                IdentityLayer(self.input_stem[0].active_out_channel, self.input_stem[0].active_out_channel)
-            ))
-        input_stem.append(self.input_stem[2].get_active_subnet(self.input_stem[0].active_out_channel, preserve_weight))
-        input_channel = self.input_stem[2].active_out_channel
+        if not self.small_input_stem:
+            if self.input_stem_skipping <= 0:
+                input_stem.append(ResidualBlock(
+                    self.input_stem[1].conv.get_active_subnet(self.input_stem[0].active_out_channel, preserve_weight),
+                    IdentityLayer(self.input_stem[0].active_out_channel, self.input_stem[0].active_out_channel)
+                ))
+            input_stem.append(self.input_stem[2].get_active_subnet(self.input_stem[0].active_out_channel, preserve_weight))
+            input_channel = self.input_stem[2].active_out_channel
+        else:
+            input_channel = self.input_stem[0].active_out_channel
 
         blocks = []
         for stage_id, block_idx in enumerate(self.grouped_block_index):

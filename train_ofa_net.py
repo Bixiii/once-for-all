@@ -11,9 +11,9 @@ import logging
 import torch
 
 from ofa.imagenet_classification.elastic_nn.modules.dynamic_op import DynamicSeparableConv2d
-from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3
+from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3, OFAResNets
 from ofa.imagenet_classification.run_manager import ImagenetRunConfig, DistributedImageNetRunConfig
-from ofa.imagenet_classification.networks import MobileNetV3Large
+from ofa.imagenet_classification.networks import MobileNetV3Large, ResNet50
 from ofa.imagenet_classification.run_manager import RunManager, DistributedRunManager
 from ofa.utils import download_url, MyRandomResizedCrop
 from ofa.imagenet_classification.elastic_nn.training.progressive_shrinking import load_models
@@ -37,6 +37,7 @@ parser.add_argument(
     '--net', type=str, default='MobileNetV3',
     choices=[
         'MobileNetV3',
+        'ResNet50',
     ]
 )
 parser.add_argument(
@@ -76,6 +77,9 @@ logging.basicConfig(filename=args.experiment_folder+'program_flow.log', level=lo
 
 logging.info('***Initialized logger***')
 
+if args.net == 'ResNet50' and args.pretrained:
+    raise NotImplementedError
+
 # Initialize Horovod
 if use_hvd:
     logging.info('Init horovod')
@@ -102,9 +106,15 @@ if args.task == 'basenet':
     args.warmup_epochs = 0
     args.warmup_lr = -1
     args.phase = 0
-    args.ks_list = '7'
-    args.expand_list = '6'
-    args.depth_list = '4'
+    if args.net == 'MobileNetV3':
+        args.ks_list = '7'
+        args.expand_list = '6'
+        args.depth_list = '4'
+    elif args.net == 'ResNet50':
+        args.ks_list = '3'
+        args.width_mult_list = '1'
+        args.expand_list = '0.35'
+        args.depth_list = '2'
 elif args.task == 'kernel':
     logging.debug('Set parameter for training elastic kernel')
     if args.pretrained:
@@ -126,34 +136,46 @@ elif args.task == 'kernel':
     args.base_lr = 3e-2
     args.warmup_epochs = 5
     args.warmup_lr = -1
-    args.ks_list = '3,5,7'
-    args.expand_list = '6'
-    args.depth_list = '4'
+    if args.net == 'MobileNetV3':
+        args.ks_list = '3,5,7'
+        args.expand_list = '6'
+        args.depth_list = '4'
+    if args.net == 'ResNet50':
+        raise NotImplementedError  # kernel stage not applicable for ResNet
 elif args.task == 'depth':
     logging.debug('Set parameter for training elastic depth')
     args.target_path = args.experiment_folder + 'kernel-2-kernel_depth/phase%d' % args.phase
     args.dynamic_batch_size = 2
     if args.phase == 1:
-        if args.pretrained:
-            if use_hvd:
-                args.source_path = download_url(
-                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K357',
-                    model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
-                )
+        if args.net == 'MobileNetV3':
+            if args.pretrained:
+                if use_hvd:
+                    args.source_path = download_url(
+                        'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K357',
+                        model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
+                    )
+                else:
+                    args.source_path = download_url(
+                        'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K357',
+                        model_dir='.torch/ofa_checkpoints/'
+                    )
             else:
-                args.source_path = download_url(
-                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K357',
-                    model_dir='.torch/ofa_checkpoints/'
-                )
-        else:
-            args.source_path = args.experiment_folder + 'normal-2-kernel/checkpoint/model_best.pth.tar'
+                args.source_path = args.experiment_folder + 'normal-2-kernel/checkpoint/model_best.pth.tar'
+        elif args.net == 'ResNet50':
+            args.source_path = args.experiment_folder + 'normal/checkpoint/model_best.pth.tar'
         args.n_epochs = 25
         args.base_lr = 2.5e-3
         args.warmup_epochs = 0
         args.warmup_lr = -1
-        args.ks_list = '3,5,7'
-        args.expand_list = '6'
-        args.depth_list = '3,4'
+        if args.net == 'MobileNetV3':
+            args.ks_list = '3,5,7'
+            args.expand_list = '6'
+            args.depth_list = '3,4'
+        elif args.net == 'ResNet50':
+            args.ks_list = '3'
+            args.width_mult_list = '1'
+            args.expand_list = '0.35'
+            args.depth_list = '1,2'
     else:
         if args.pretrained:
             if use_hvd:
@@ -172,9 +194,15 @@ elif args.task == 'depth':
         args.base_lr = 7.5e-3
         args.warmup_epochs = 5
         args.warmup_lr = -1
-        args.ks_list = '3,5,7'
-        args.expand_list = '6'
-        args.depth_list = '2,3,4'
+        if args.net == 'MobileNetV3':
+            args.ks_list = '3,5,7'
+            args.expand_list = '6'
+            args.depth_list = '2,3,4'
+        elif args.net == 'ResNet50':
+            args.ks_list = '3'
+            args.width_mult_list = '1'
+            args.expand_list = '0.35'
+            args.depth_list = '0,1,2'
 elif args.task == 'expand':
     logging.debug('Set parameter for training elastic expand')
     args.target_path = args.experiment_folder + 'kernel_depth-2-kernel_depth_expand/phase%d' % args.phase
@@ -197,9 +225,15 @@ elif args.task == 'expand':
         args.base_lr = 2.5e-3
         args.warmup_epochs = 0
         args.warmup_lr = -1
-        args.ks_list = '3,5,7'
-        args.expand_list = '4,6'
-        args.depth_list = '2,3,4'
+        if args.net == 'MobileNetV3':
+            args.ks_list = '3,5,7'
+            args.expand_list = '4,6'
+            args.depth_list = '2,3,4'
+        elif args.net == 'ResNet50':
+            args.ks_list = '3'
+            args.width_mult_list = '1'
+            args.expand_list = '0.25,0.35'
+            args.depth_list = '0,1,2'
     else:
         if args.pretrained:
             if use_hvd:
@@ -218,9 +252,15 @@ elif args.task == 'expand':
         args.base_lr = 7.5e-3
         args.warmup_epochs = 5
         args.warmup_lr = -1
-        args.ks_list = '3,5,7'
-        args.expand_list = '3,4,6'
-        args.depth_list = '2,3,4'
+        if args.net == 'MobileNetV3':
+            args.ks_list = '3,5,7'
+            args.expand_list = '3,4,6'
+            args.depth_list = '2,3,4'
+        elif args.net == 'ResNet50':
+            args.ks_list = '3'
+            args.width_mult_list = '1'
+            args.expand_list = '0.20,0.25,0.35'
+            args.depth_list = '0,1,2'
 else:
     raise NotImplementedError
 args.manual_seed = 0
@@ -331,33 +371,59 @@ if __name__ == '__main__':
     # build net from args
     args.width_mult_list = [float(width_mult) for width_mult in args.width_mult_list.split(',')]
     args.ks_list = [int(ks) for ks in args.ks_list.split(',')]
-    args.expand_list = [int(e) for e in args.expand_list.split(',')]
+    if args.net == 'MobileNetV3':
+        args.expand_list = [int(e) for e in args.expand_list.split(',')]
+    elif args.net == 'ResNet50':
+        args.expand_list = [float(e) for e in args.expand_list.split(",")]
     args.depth_list = [int(d) for d in args.depth_list.split(',')]
 
     args.width_mult_list = args.width_mult_list[0] if len(args.width_mult_list) == 1 else args.width_mult_list
     logging.debug('Build net from parameters')
-    net = OFAMobileNetV3(
-        n_classes=run_config.data_provider.n_classes,
-        bn_param=(args.bn_momentum, args.bn_eps),
-        dropout_rate=args.dropout,
-        base_stage_width=args.base_stage_width,
-        width_mult=args.width_mult_list,
-        ks_list=args.ks_list,
-        expand_ratio_list=args.expand_list,
-        depth_list=args.depth_list
-    )
+
+    if args.net == 'MobileNetV3':
+        net = OFAMobileNetV3(
+            n_classes=run_config.data_provider.n_classes,
+            bn_param=(args.bn_momentum, args.bn_eps),
+            dropout_rate=args.dropout,
+            base_stage_width=args.base_stage_width,
+            width_mult=args.width_mult_list,
+            ks_list=args.ks_list,
+            expand_ratio_list=args.expand_list,
+            depth_list=args.depth_list,
+        )
+    elif args.net == 'ResNet50':
+        net = OFAResNets(
+            n_classes=run_config.data_provider.n_classes,
+            bn_param=(args.bn_momentum, args.bn_eps),
+            dropout_rate=args.dropout,
+            expand_ratio_list=args.expand_list,
+            depth_list=args.depth_list,
+            width_mult_list=args.width_mult_list,
+            small_input_stem=True
+        )
+
     # teacher model
     if args.kd_ratio > 0:
         logging.debug('Create teacher model')
-        args.teacher_model = MobileNetV3Large(
-            n_classes=run_config.data_provider.n_classes,
-            bn_param=(args.bn_momentum, args.bn_eps),
-            dropout_rate=0,
-            width_mult=1.0,
-            ks=7,
-            expand_ratio=6,
-            depth_param=4,
-        )
+        if args.net == 'MobileNetV3':
+            args.teacher_model = MobileNetV3Large(
+                n_classes=run_config.data_provider.n_classes,
+                bn_param=(args.bn_momentum, args.bn_eps),
+                dropout_rate=0,
+                width_mult=1.0,
+                ks=7,
+                expand_ratio=6,
+                depth_param=4,
+            )
+        elif args.net == 'ResNet50':
+            args.teacher_model = ResNet50(
+                n_classes=run_config.data_provider.n_classes,
+                bn_param=(args.bn_momentum, args.bn_eps),
+                dropout_rate=args.dropout,
+                width_mult=1.0,
+                expand_ratio=0.35,
+                depth_list=[4, 4, 6, 4]
+            )
         args.teacher_model.cuda()
 
     """ Distributed RunManager """

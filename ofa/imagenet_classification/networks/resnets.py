@@ -95,13 +95,28 @@ class ResNets(MyNetwork):
         return info_list
 
     def load_state_dict(self, state_dict, **kwargs):
-        super(ResNets, self).load_state_dict(state_dict)
+        model_dict = self.state_dict()
+        for key in state_dict:
+            new_key = key
+            if new_key in model_dict:
+                pass
+            elif '.linear.linear' in new_key:
+                new_key = new_key.replace('.linear.linear', '.linear')
+            elif '.bn.bn' in new_key:
+                new_key = new_key.replace('.bn.bn', '.bn')
+            elif '.conv.conv' in new_key:
+                new_key = new_key.replace('.conv.conv', '.conv')
+            else:
+                raise ValueError(new_key)
+            assert new_key in model_dict, '%s' % new_key
+            model_dict[new_key] = state_dict[key]
+        super(ResNets, self).load_state_dict(model_dict)
 
 
 class ResNet50(ResNets):
 
     def __init__(self, n_classes=1000, width_mult=1.0, bn_param=(0.1, 1e-5), dropout_rate=0,
-                 expand_ratio=None, depth_param=None):
+                 expand_ratio=None, depth_param=None, depth_list=None):
 
         expand_ratio = 0.25 if expand_ratio is None else expand_ratio
 
@@ -110,10 +125,13 @@ class ResNet50(ResNets):
         for i, width in enumerate(stage_width_list):
             stage_width_list[i] = make_divisible(width * width_mult, MyNetwork.CHANNEL_DIVISIBLE)
 
-        depth_list = [3, 4, 6, 3]
-        if depth_param is not None:
-            for i, depth in enumerate(ResNets.BASE_DEPTH_LIST):
-                depth_list[i] = depth + depth_param
+        if depth_list is None:
+            depth_list = [3, 4, 6, 3]
+            if depth_param is not None:
+                for i, depth in enumerate(ResNets.BASE_DEPTH_LIST):
+                    depth_list[i] = depth + depth_param
+        elif len(depth_list) != 4:
+            raise ValueError('Depth list for ResNet50 should be of size 4')
 
         stride_list = [1, 2, 2, 2]
 
