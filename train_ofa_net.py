@@ -366,7 +366,7 @@ if __name__ == '__main__':
         train(run_manager, args,
               lambda _run_manager, epoch, is_test: validate(_run_manager, epoch, is_test, **validate_func_dict))
     elif args.task == 'depth':
-        logging.debug('Start training elastic depth')
+        logging.debug('Start training elastic depth (phase %d)' % args.phase)
         from ofa.imagenet_classification.elastic_nn.training.progressive_shrinking import train_elastic_depth
         if args.phase == 1:
             if use_hvd:
@@ -392,7 +392,7 @@ if __name__ == '__main__':
                 )
         train_elastic_depth(train, run_manager, args, validate_func_dict)
     elif args.task == 'expand':
-        logging.debug('Start training elastic expand')
+        logging.debug('Start training elastic expand (phase %d)' % args.phase)
         from ofa.imagenet_classification.elastic_nn.training.progressive_shrinking import train_elastic_expand
         if args.phase == 1:
             if use_hvd:
