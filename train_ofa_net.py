@@ -50,6 +50,7 @@ parser.add_argument(
         'kernel',
         'depth',
         'expand',
+        'width',
     ]
 )
 parser.add_argument(
@@ -98,6 +99,7 @@ else:
     raise EnvironmentError
 
 args.image_size = None
+args.width_mult_list = None
 if args.task == 'basenet':
     logging.info('Set parameter for training basenet')
     args.target_path = args.experiment_folder + 'normal'
@@ -116,7 +118,7 @@ if args.task == 'basenet':
         args.depth_list = '4'
     elif args.net == 'ResNet50':
         args.ks_list = '3'
-        args.width_mult_list = '1'
+        args.width_mult_list = '1.0'
         args.expand_list = '0.35'
         args.depth_list = '2'
 elif args.task == 'kernel':
@@ -177,7 +179,7 @@ elif args.task == 'depth':
             args.depth_list = '3,4'
         elif args.net == 'ResNet50':
             args.ks_list = '3'
-            args.width_mult_list = '1'
+            args.width_mult_list = '1.0'
             args.expand_list = '0.35'
             args.depth_list = '1,2'
     else:
@@ -204,7 +206,7 @@ elif args.task == 'depth':
             args.depth_list = '2,3,4'
         elif args.net == 'ResNet50':
             args.ks_list = '3'
-            args.width_mult_list = '1'
+            args.width_mult_list = '1.0'
             args.expand_list = '0.35'
             args.depth_list = '0,1,2'
 elif args.task == 'expand':
@@ -235,7 +237,7 @@ elif args.task == 'expand':
             args.depth_list = '2,3,4'
         elif args.net == 'ResNet50':
             args.ks_list = '3'
-            args.width_mult_list = '1'
+            args.width_mult_list = '1.0'
             args.expand_list = '0.25,0.35'
             args.depth_list = '0,1,2'
     else:
@@ -262,7 +264,49 @@ elif args.task == 'expand':
             args.depth_list = '2,3,4'
         elif args.net == 'ResNet50':
             args.ks_list = '3'
-            args.width_mult_list = '1'
+            args.width_mult_list = '1.0'
+            args.expand_list = '0.20,0.25,0.35'
+            args.depth_list = '0,1,2'
+elif args.task == 'width':
+    logging.debug('Set parameter for training elastic width')
+    args.target_path = args.experiment_folder + 'kernel_depth_expand-2-kernel_depth_expand_width/phase%d' % args.phase
+    args.dynamic_batch_size = 4
+    if args.phase == 1:
+        if args.pretrained:
+            raise NotImplementedError
+        else:
+            args.source_path = args.experiment_folder + 'kernel_depth-2-kernel_depth_expand/phase2/checkpoint/model_best.pth.tar'
+        args.n_epochs = 25
+        args.base_lr = 2.5e-3
+        args.warmup_epochs = 0
+        args.warmup_lr = -1
+        if args.net == 'MobileNetV3':
+            raise NotImplementedError
+            # args.ks_list = '3,5,7'
+            # args.expand_list = '4,6'
+            # args.depth_list = '2,3,4'
+        elif args.net == 'ResNet50':
+            args.ks_list = '3'
+            args.width_mult_list = '0.8,1.0'
+            args.expand_list = '0.20,0.25,0.35'
+            args.depth_list = '0,1,2'
+    else:
+        if args.pretrained:
+            raise NotImplementedError
+        else:
+            args.source_path = args.experiment_folder + 'kernel_depth_expand-2-kernel_depth_expand_width/phase1/checkpoint/model_best.pth.tar'
+        args.n_epochs = 120
+        args.base_lr = 7.5e-3
+        args.warmup_epochs = 5
+        args.warmup_lr = -1
+        if args.net == 'MobileNetV3':
+            raise NotImplementedError
+            # args.ks_list = '3,5,7'
+            # args.expand_list = '3,4,6'
+            # args.depth_list = '2,3,4'
+        elif args.net == 'ResNet50':
+            args.ks_list = '3'
+            args.width_mult_list = '0.65,0.8,1.0'
             args.expand_list = '0.20,0.25,0.35'
             args.depth_list = '0,1,2'
 else:
@@ -319,7 +363,8 @@ args.bn_eps = 1e-5
 args.dropout = 0.1
 args.base_stage_width = 'proxyless'
 
-args.width_mult_list = '1.0'
+if args.width_mult_list is None:
+    args.width_mult_list = '1.0'
 args.independent_distributed_sampling = False
 
 if args.task == 'basenet':
@@ -527,5 +572,9 @@ if __name__ == '__main__':
         logging.debug('Start training elastic expand (phase %d)' % args.phase)
         from ofa.imagenet_classification.elastic_nn.training.progressive_shrinking import train_elastic_expand
         train_elastic_expand(train, run_manager, args, validate_func_dict)
+    elif args.task == 'width':
+        logging.debug('Start training elastic width (phase %d)' % args.phase)
+        from ofa.imagenet_classification.elastic_nn.training.progressive_shrinking import train_elastic_width_mult
+        train_elastic_width_mult(train, run_manager, args, validate_func_dict)
     else:
         raise NotImplementedError

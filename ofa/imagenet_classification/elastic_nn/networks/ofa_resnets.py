@@ -178,9 +178,10 @@ class OFAResNets(ResNets):
         self.set_active_subnet(d=max(self.depth_list), e=max(self.expand_ratio_list), w=len(self.width_mult_list) - 1)
 
     def set_active_subnet(self, d=None, e=None, w=None, **kwargs):
-        depth = val2list(d, len(ResNets.BASE_DEPTH_LIST) + 1)
+        depth = val2list(d, len(ResNets.BASE_DEPTH_LIST) + 1)  # +1 for input stem
         expand_ratio = val2list(e, len(self.blocks))
-        width_mult = val2list(w, len(ResNets.BASE_DEPTH_LIST) + 2)
+        size_input_stem = 1 if self.small_input_stem else 2
+        width_mult = val2list(w, len(ResNets.BASE_DEPTH_LIST) + size_input_stem)
 
         for block, e in zip(self.blocks, expand_ratio):
             if e is not None:
@@ -266,14 +267,17 @@ class OFAResNets(ResNets):
 
     def get_active_net_config(self):
         input_stem_config = [self.input_stem[0].get_active_subnet_config(3)]
-        if self.input_stem_skipping <= 0:
-            input_stem_config.append({
-                'name': ResidualBlock.__name__,
-                'conv': self.input_stem[1].conv.get_active_subnet_config(self.input_stem[0].active_out_channel),
-                'shortcut': IdentityLayer(self.input_stem[0].active_out_channel, self.input_stem[0].active_out_channel),
-            })
-        input_stem_config.append(self.input_stem[2].get_active_subnet_config(self.input_stem[0].active_out_channel))
-        input_channel = self.input_stem[2].active_out_channel
+        if not self.small_input_stem:
+            if self.input_stem_skipping <= 0:
+                input_stem_config.append({
+                    'name': ResidualBlock.__name__,
+                    'conv': self.input_stem[1].conv.get_active_subnet_config(self.input_stem[0].active_out_channel),
+                    'shortcut': IdentityLayer(self.input_stem[0].active_out_channel, self.input_stem[0].active_out_channel),
+                })
+            input_stem_config.append(self.input_stem[2].get_active_subnet_config(self.input_stem[0].active_out_channel))
+            input_channel = self.input_stem[2].active_out_channel
+        else:
+            input_channel = self.input_stem[0].active_out_channel
 
         blocks_config = []
         for stage_id, block_idx in enumerate(self.grouped_block_index):
