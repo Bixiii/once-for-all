@@ -113,6 +113,9 @@ class DistributedRunManager:
     def network(self, new_val):
         self.net = new_val
 
+    def add_tensorboard_scalar(self, name, value, step):
+        self.tensorboard_writer.add_scalar(name, value, step)
+
     def write_log(self, log_str, prefix='valid', should_print=True, mode='a'):
         if self.is_root:
             write_log(self.logs_path, log_str, prefix, should_print, mode)

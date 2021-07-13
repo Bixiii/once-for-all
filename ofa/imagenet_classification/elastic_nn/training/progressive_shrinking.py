@@ -191,6 +191,8 @@ def train(run_manager, args, validate_func=None):
                 val_log += ', Train top-1 {top1:.3f}, Train loss {loss:.3f}\t'.format(top1=train_top1, loss=train_loss)
                 val_log += _val_log
                 run_manager.write_log(val_log, 'valid', should_print=False)
+                run_manager.add_tensorboard_scalar('test accuracy', val_acc, epoch)
+                run_manager.add_tensorboard_scalar('loss', val_loss, epoch)
 
                 run_manager.save_model({
                     'epoch': epoch,
