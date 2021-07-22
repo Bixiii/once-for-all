@@ -10,8 +10,9 @@ from ofa.imagenet_classification.data_providers.imagenet import ImagenetDataProv
 from ofa.imagenet_classification.run_manager import ImagenetRunConfig, RunManager
 from ofa.imagenet_classification.elastic_nn.networks import OFAResNets, OFAMobileNetV3
 from ofa.model_zoo import ofa_net
+from ofa.utils import get_net_info
+import csv
 import torch.onnx
-
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -116,25 +117,43 @@ run_config.data_provider.assign_active_img_size(args.image_size)  # assign image
     you can also manually set the sub-network using: 
         ofa_network.set_active_subnet(ks=7, e=6, d=4) 
 """
+evaluation_data = []
+evaluation_data_fields = ['params', 'flops', 'loss', 'top1', 'top5', 'net_config']
 
-# ofa_network.sample_active_subnet()
-random_net_config = {'d': [2, 1, 0, 2, 2], 'e': [0.35, 0.35, 0.2, 0.25, 0.25, 0.35, 0.25, 0.35, 0.2, 0.35, 0.35, 0.25, 0.25, 0.35, 0.2, 0.25, 0.35, 0.2], 'w': [1, 2, 0, 0, 2]}
-smallest_net_config = {'d': [0, 0, 0, 0, 0], 'e': [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2], 'w': [0, 0, 0, 0, 0]}
-largest_net_config = {'d': [2, 2, 2, 2, 2], 'e': [0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35], 'w': [2, 2, 2, 2, 2]}
-net_config = largest_net_config
-ofa_network.set_active_subnet(**net_config)
+for i in range(100):
+    net_config = ofa_network.sample_active_subnet()
+    # random_net_config = {'d': [2, 1, 0, 2, 2], 'e': [0.35, 0.35, 0.2, 0.25, 0.25, 0.35, 0.25, 0.35, 0.2, 0.35, 0.35, 0.25, 0.25, 0.35, 0.2, 0.25, 0.35, 0.2], 'w': [1, 2, 0, 0, 2]}
+    # smallest_net_config = {'d': [0, 0, 0, 0, 0], 'e': [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2], 'w': [0, 0, 0, 0, 0]}
+    # largest_net_config = {'d': [2, 2, 2, 2, 2], 'e': [0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35], 'w': [2, 2, 2, 2, 2]}
+    # net_config = largest_net_config
+    # ofa_network.set_active_subnet(**net_config)
 
-""" Test sampled subnet 
-"""
-subnet = ofa_network.get_active_subnet(preserve_weight=True)
-run_manager = RunManager('.tmp/eval_subnet', subnet, run_config, init=False)
-run_manager.reset_running_statistics(net=subnet)
+    """ Test sampled subnet 
+    """
+    subnet = ofa_network.get_active_subnet(preserve_weight=True)
+    net_info = get_net_info(subnet, [3, args.image_size, args.image_size], print_info=False)
+    run_manager = RunManager('.tmp/eval_subnet', subnet, run_config, init=False)
+    run_manager.reset_running_statistics(net=subnet)
 
-print('Test random subnet:')
-print(subnet.module_str)
+    # print('Test random subnet:')
+    # print(subnet.module_str)
 
-loss, (top1, top5) = run_manager.validate(net=subnet)
-print('Results subnet: loss=%.5f,\t top1=%.1f,\t top5=%.1f' % (loss, top1, top5))
+    loss, (top1, top5) = run_manager.validate(net=subnet)
+    # print('Results subnet: loss=%.5f,\t top1=%.1f,\t top5=%.1f' % (loss, top1, top5))
 
-print('Export selected subnet as ONNX')
-export_as_onnx(subnet.cpu(), 'subnet.onnx')
+    net_info['loss'] = loss
+    net_info['top1'] = top1
+    net_info['top5'] = top5
+    net_info['net_config'] = net_config
+
+    evaluation_data.append(net_info)
+
+
+writer = csv.DictWriter(open('eval_data_points.csv', 'w', newline=''), fieldnames=evaluation_data_fields)
+writer.writeheader()
+for data in evaluation_data:
+    writer.writerow(data)
+# print('Eval result: ', str(net_info))
+
+# print('Export selected subnet as ONNX')
+# export_as_onnx(subnet.cpu(), 'subnet.onnx')
