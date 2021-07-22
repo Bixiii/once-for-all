@@ -260,7 +260,7 @@ class OFAResNets(ResNets):
                 blocks.append(self.blocks[idx].get_active_subnet(input_channel, preserve_weight))
                 input_channel = self.blocks[idx].active_out_channel
         classifier = self.classifier.get_active_subnet(input_channel, preserve_weight)
-        subnet = ResNets(input_stem, blocks, classifier)
+        subnet = ResNets(input_stem, blocks, classifier, max_pooling=self.max_pooling)
 
         subnet.set_bn_param(**self.get_bn_param())
         return subnet
