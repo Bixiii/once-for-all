@@ -149,7 +149,7 @@ class MobileNetArchEncoder:
 class ResNetArchEncoder:
 
     def __init__(self, image_size_list=None, depth_list=None, expand_list=None, width_mult_list=None,
-                 base_depth_list=None):
+                 base_depth_list=None, small_input_stem=False):
         self.image_size_list = [224] if image_size_list is None else image_size_list
         self.expand_list = [0.2, 0.25, 0.35] if expand_list is None else expand_list
         self.depth_list = [0, 1, 2] if depth_list is None else depth_list
@@ -157,6 +157,8 @@ class ResNetArchEncoder:
 
         self.base_depth_list = ResNets.BASE_DEPTH_LIST if base_depth_list is None else base_depth_list
 
+        # if input stem with only one conv layer is used
+        self.small_input_stem = small_input_stem
         """" build info dict """
         self.n_dim = 0
         # resolution
@@ -212,7 +214,8 @@ class ResNetArchEncoder:
         elif target == 'width_mult':
             target_dict = self.width_mult_info
             choices = list(range(len(self.width_mult_list)))
-            for i in range(self.n_stage + 2):
+            input_stem_size = 1 if self.small_input_stem else 2
+            for i in range(self.n_stage + input_stem_size):
                 target_dict['val2id'].append({})
                 target_dict['id2val'].append({})
                 target_dict['L'].append(self.n_dim)
@@ -230,7 +233,8 @@ class ResNetArchEncoder:
         feature = np.zeros(self.n_dim)
         feature[self.r_info['val2id'][r]] = 1
         feature[self.input_stem_d_info['val2id'][input_stem_skip]] = 1
-        for i in range(self.n_stage + 2):
+        input_stem_size = 1 if self.small_input_stem else 2
+        for i in range(self.n_stage + input_stem_size):
             feature[self.width_mult_info['val2id'][i][w[i]]] = 1
 
         start_pt = 0
@@ -253,7 +257,8 @@ class ResNetArchEncoder:
         assert img_sz in self.image_size_list
         arch_dict = {'d': [input_stem_skip], 'e': [], 'w': [], 'image_size': img_sz}
 
-        for i in range(self.n_stage + 2):
+        input_stem_size = 1 if self.small_input_stem else 2
+        for i in range(self.n_stage + input_stem_size):
             arch_dict['w'].append(
                 self.width_mult_info['id2val'][i][
                     int(np.argmax(feature[self.width_mult_info['L'][i]:self.width_mult_info['R'][i]])) +
@@ -285,10 +290,11 @@ class ResNetArchEncoder:
         return arch_dict
 
     def random_sample_arch(self):
+        input_stem_size = 1 if self.small_input_stem else 2
         return {
             'd': [random.choice([0, 2])] + random.choices(self.depth_list, k=self.n_stage),
             'e': random.choices(self.expand_list, k=self.max_n_blocks),
-            'w': random.choices(list(range(len(self.width_mult_list))), k=self.n_stage + 2),
+            'w': random.choices(list(range(len(self.width_mult_list))), k=self.n_stage + input_stem_size),
             'image_size': random.choice(self.image_size_list)
         }
 
