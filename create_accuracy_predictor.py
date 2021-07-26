@@ -1,4 +1,5 @@
 import argparse
+import glob
 import os
 
 import torch
@@ -6,7 +7,6 @@ from ofa.imagenet_classification.run_manager import ImagenetRunConfig, RunManage
 from ofa.imagenet_classification.elastic_nn.networks import OFAResNets
 from ofa.nas.accuracy_predictor import *
 from tqdm import tqdm
-import time
 from torch.utils.tensorboard import SummaryWriter
 
 parser = argparse.ArgumentParser()
@@ -36,21 +36,27 @@ if args.dataset == 'cifar10':
     args.image_size = 32
     args.image_size_list = [32]
     args.num_classes = 10
-    args.acc_dataset_size = 1000
+    args.acc_dataset_size = 4000
     args.small_input_stem = True
+    # Predictor architecture
+    num_layers = 1
+    num_hidden_units = 100
 else:
     args.image_size = 224
     args.image_size_list = [128, 160, 192, 224]
     args.num_classes = 1000
     args.acc_dataset_size = 16000
     args.small_input_stem = False
+    # Predictor architecture
+    num_layers = 3
+    num_hidden_units = 400
 
 # training parameters
 batch_size = 100
 n_workers = 0
 args.lr = 1e-3
 args.weight_decay = 1e-4
-args.num_epochs = 10
+args.num_epochs = 200
 if torch.cuda.is_available():
     device = 'cuda'
 else:
@@ -60,6 +66,7 @@ else:
 depth_list = [0, 1, 2]
 expand_ratio_list = [0.2, 0.25, 0.35]
 width_mult_list = [0.65, 0.8, 1.0]
+
 
 args.acc_dataset_folder = 'exp/exp_OFA' + args.net + '_' + args.dataset + '_' + args.experiment_id + '/acc_dataset'
 comment = '_pt_OFA' + args.net + 'AccuracyPredictor_' + args.dataset + '_' + str(args.experiment_id)
@@ -76,7 +83,7 @@ ofa_network = OFAResNets(
 
 init = torch.load(args.net_path, map_location='cpu')['state_dict']
 ofa_network.load_state_dict(init)
-ofa_network.cuda()
+ofa_network.to(device)
 
 run_config = ImagenetRunConfig(test_batch_size=batch_size, n_worker=n_workers, dataset=args.dataset,
                                data_path=args.data_path)
@@ -92,11 +99,14 @@ arch_encoder = ResNetArchEncoder(
 
 accuracy_dataset = AccuracyDataset(args.acc_dataset_folder)
 
-# create accuracy dataset for each image size
-accuracy_dataset.build_acc_dataset(run_manager, ofa_network, args.acc_dataset_size, args.image_size_list)
-
-# merge accuracy dataset together
-accuracy_dataset.merge_acc_dataset(args.image_size_list)
+# skip creatoin of accuracy dataset if there is already one in the folder
+files = glob.glob(os.path.join(args.acc_dataset_folder, 'src/*'))
+if len(files) < 1:
+    # create accuracy dataset for each image size
+    accuracy_dataset.build_acc_dataset(run_manager, ofa_network, args.acc_dataset_size, args.image_size_list)
+if not os.path.isfile(os.path.join(args.acc_dataset_folder, 'acc.dict')):
+    # merge accuracy dataset together
+    accuracy_dataset.merge_acc_dataset(args.image_size_list)
 
 # get data loaders for the accuracy dataset
 train_data_loader, valid_data_loader, base_acc = accuracy_dataset.build_acc_data_loader(
@@ -105,12 +115,16 @@ train_data_loader, valid_data_loader, base_acc = accuracy_dataset.build_acc_data
 
 accuracy_predictor = AccuracyPredictor(
     arch_encoder=arch_encoder,
-).cuda()
+    hidden_size=num_hidden_units,
+    n_layers=num_layers,
+    base_acc=base_acc
+)
 accuracy_predictor = torch.nn.DataParallel(accuracy_predictor)
 
 train_criterion = torch.nn.MSELoss()
 test_criterion = torch.nn.L1Loss()
 optimizer = torch.optim.Adam(accuracy_predictor.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.num_epochs)
 tensorboard_writer = SummaryWriter(comment=comment)
 
 
@@ -162,17 +176,22 @@ def test(epoch):
 
 
 def save_model():
-    checkpoint = {'state_dict': accuracy_predictor.state_dict(), 'dataset': args.dataset}
+    checkpoint = {'state_dict': accuracy_predictor.module.state_dict(), 'dataset': args.dataset}
     best_path = os.path.join(args.acc_dataset_folder, 'acc_predictor_model_best.pth.tar')
     torch.save({'state_dict': checkpoint['state_dict']}, best_path)
 
 
-best_test_loss = float('inf')
-for epoch in range(0, args.num_epochs):
-    train_loss = train_one_epoch(epoch)
-    test_loss = test(epoch)
-    if test_loss < best_test_loss:
-        best_test_loss = test_loss
-        save_model()
-    tensorboard_writer.add_scalar('test loss', test_loss, epoch)
-    tensorboard_writer.add_scalar('train loss', train_loss, epoch)
+def train_accuracy_predictor():
+    best_test_loss = float('inf')
+    for epoch in range(0, args.num_epochs):
+        train_loss = train_one_epoch(epoch)
+        test_loss = test(epoch)
+        scheduler.step()
+        if test_loss < best_test_loss:
+            best_test_loss = test_loss
+            save_model()
+        tensorboard_writer.add_scalar('test loss', test_loss, epoch)
+        tensorboard_writer.add_scalar('train loss', train_loss, epoch)
+
+
+train_accuracy_predictor()
