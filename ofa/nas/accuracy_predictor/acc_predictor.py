@@ -13,12 +13,13 @@ __all__ = ['AccuracyPredictor']
 class AccuracyPredictor(nn.Module):
 
     def __init__(self, arch_encoder, hidden_size=400, n_layers=3,
-                 checkpoint_path=None, device='cuda:0'):
+                 checkpoint_path=None, device='cuda:0', base_acc=0):
         super(AccuracyPredictor, self).__init__()
         self.arch_encoder = arch_encoder
         self.hidden_size = hidden_size
         self.n_layers = n_layers
         self.device = device
+        self.checkpoint_path = checkpoint_path
 
         # build layers
         layers = []
@@ -29,13 +30,14 @@ class AccuracyPredictor(nn.Module):
             ))
         layers.append(nn.Linear(self.hidden_size, 1, bias=False))
         self.layers = nn.Sequential(*layers)
-        self.base_acc = nn.Parameter(torch.zeros(1, device=self.device), requires_grad=False)
+        self.base_acc = nn.Parameter(torch.tensor(base_acc, device=self.device), requires_grad=False)
 
         if checkpoint_path is not None and os.path.exists(checkpoint_path):
             checkpoint = torch.load(checkpoint_path, map_location='cpu')
             if 'state_dict' in checkpoint:
                 checkpoint = checkpoint['state_dict']
             self.load_state_dict(checkpoint)
+            self.base_acc = nn.Parameter(checkpoint['base_acc'])
             print('Loaded checkpoint from %s' % checkpoint_path)
 
         self.layers = self.layers.to(self.device)
