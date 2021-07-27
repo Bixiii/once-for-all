@@ -100,24 +100,26 @@ if args.net_typ == 'ResNet50':
         width_mult_list=ofa_network.width_mult_list,
         small_input_stem=ofa_network.small_input_stem,
     )
-    acc_pred_checkpoint_path = r'C:\Users\bixi\PycharmProjects\OnceForAllFork\exp\exp_OFAResNet50_cifar10_exp-0.0.2\acc_dataset\acc_predictor_model_best.pth.tar'
     accuracy_predictor = AccuracyPredictor(
         arch_encoder=arch_encoder,
-        n_layers=2,
-        hidden_size=150,
-        checkpoint_path=acc_pred_checkpoint_path,
+        n_layers=1,
+        hidden_size=100,
+        checkpoint_path=args.accuracy_predictor_path,
     )
     # accuracy_predictor = torch.nn.DataParallel(accuracy_predictor)
 else:
     raise NotImplementedError
 
+
+data_fields = ['params', 'flops', 'loss', 'top1', 'top5', 'net_config', 'estimated_top1']
+file = open('eval_acc_pred_data_points.csv', 'w', newline='')
+writer = csv.DictWriter(file, fieldnames=data_fields)
+writer.writeheader()
+
 """ Randomly sample a sub-network, 
     you can also manually set the sub-network using: 
         ofa_network.set_active_subnet(ks=7, e=6, d=4) 
 """
-evaluation_data = []
-evaluation_data_fields = ['params', 'flops', 'loss', 'top1', 'top5', 'net_config', 'estimated_top1']
-
 for i in range(num_tests):
     net_config = ofa_network.sample_active_subnet()
 
@@ -139,9 +141,6 @@ for i in range(num_tests):
     net_info['net_config'] = net_config
     net_info['estimated_top1'] = estimated_top1.item()
 
-    evaluation_data.append(net_info)
+    writer.writerow(net_info)
+    file.flush()
 
-writer = csv.DictWriter(open('eval_acc_pred_data_points.csv', 'w', newline=''), fieldnames=evaluation_data_fields)
-writer.writeheader()
-for data in evaluation_data:
-    writer.writerow(data)
