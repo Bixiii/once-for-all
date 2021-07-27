@@ -169,7 +169,11 @@ class ResNet50(ResNets):
 
 
 class ResNet50D(ResNets):
-
+    """
+    ResNet variant that modifies the downsampling block, replaces 7x7 convolution in input stem with with three 3x3
+    convolutions, and inserts an additional average pooling layer in the residual connection.
+    For details see "bag of tricks for image classification with convolutional neural networks".
+    """
     def __init__(self, n_classes=1000, width_mult=1.0, bn_param=(0.1, 1e-5), dropout_rate=0,
                  expand_ratio=None, depth_param=None):
 
