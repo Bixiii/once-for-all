@@ -56,6 +56,17 @@ class AccuracyDataset:
 
     # TODO: support parallel building
     def build_acc_dataset(self, run_manager, ofa_network, n_arch=1000, image_size_list=None):
+        """
+        Samples subnets and records their accuracy
+        Args:
+            run_manager (): run manager instance to evaluate accuracy of subnetworks
+            ofa_network (): trained ofa network
+            n_arch (): How many different network architectures should be recorded
+            image_size_list (): list of image sizes for which the accuracy will be recoreder for each subnet
+
+        Returns: Creates a file containing the network architecture and the corresponding accuracy
+
+        """
         # load net_id_list, random sample if not exist
         if os.path.isfile(self.net_id_path):
             net_id_list = json.load(open(self.net_id_path))
@@ -140,6 +151,15 @@ class AccuracyDataset:
         return merged_acc_dict
 
     def build_acc_data_loader(self, arch_encoder, n_training_sample=None, batch_size=256, n_workers=16):
+        """
+        Creates a train- and valid-dataloader form the accuracy dataset.
+        Loads the accuracy dataset and splits the data in a train and validation set
+        Args:
+            n_training_sample (): size of training dataset, if none 80% of accuracy dataset
+
+        Returns: train dataloader, validation dataloader, averaged accuracy over accuracy dataset
+
+        """
         # load data
         acc_dict = json.load(open(self.acc_dict_path))
         X_all = []

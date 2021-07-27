@@ -147,6 +147,13 @@ class MobileNetArchEncoder:
 
 
 class ResNetArchEncoder:
+    """
+    Encoder to represent network architecture as feature vector
+
+    arch2feature and feature2arch does not have to result in the initial state again:
+        for layers that are skipped the expand is set to 0 in the feature vector and therefore
+        this information (which is not needed) is lost
+    """
 
     def __init__(self, image_size_list=None, depth_list=None, expand_list=None, width_mult_list=None,
                  base_depth_list=None, small_input_stem=False):
@@ -226,6 +233,15 @@ class ResNetArchEncoder:
                 target_dict['R'].append(self.n_dim)
 
     def arch2feature(self, arch_dict):
+        """
+        Encodes a subnet architecture for the accuracy predictor
+        Args:
+            arch_dict (): contains depth_list, expand_list, width_list of the subnet
+                          as well as an valid image size (one value only)
+
+        Returns: feature vector encoding the architecture
+
+        """
         d, e, w, r = arch_dict['d'], arch_dict['e'], arch_dict['w'], arch_dict['image_size']
         input_stem_skip = 1 if d[0] > 0 else 0
         d = d[1:]
@@ -247,6 +263,14 @@ class ResNetArchEncoder:
         return feature
 
     def feature2arch(self, feature):
+        """
+        converts feature vector back to human readable architecture configuration
+        Args:
+            feature (): feature vector encoding current architecture information
+
+        Returns: architecture configuration, some information for layers that are skip is lost during the conversion
+
+        """
         img_sz = self.r_info['id2val'][
             int(np.argmax(feature[self.r_info['L'][0]:self.r_info['R'][0]])) + self.r_info['L'][0]
         ]
@@ -290,6 +314,11 @@ class ResNetArchEncoder:
         return arch_dict
 
     def random_sample_arch(self):
+        """
+        Create random architecture configuration
+        Returns: created architecture configuration in a dictionary
+
+        """
         input_stem_size = 1 if self.small_input_stem else 2
         return {
             'd': [random.choice([0, 2])] + random.choices(self.depth_list, k=self.n_stage),
@@ -299,11 +328,27 @@ class ResNetArchEncoder:
         }
 
     def mutate_resolution(self, arch_dict, mutate_prob):
+        """
+        Changes the image resolution with a given probability
+        Args:
+            arch_dict (): current architecture configuration
+            mutate_prob (): probability for mutation/change
+
+        Returns: new architecture
+
+        """
         if random.random() < mutate_prob:
             arch_dict['image_size'] = random.choice(self.image_size_list)
         return arch_dict
 
     def mutate_arch(self, arch_dict, mutate_prob):
+        """
+        Changes each design parameter of the architecture with a given probability
+        Args:
+            arch_dict (): current architecture configuration
+            mutate_prob (): probability for mutation/change
+
+        """
         # input stem skip
         if random.random() < mutate_prob:
             arch_dict['d'][0] = random.choice([0, 2])
