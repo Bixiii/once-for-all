@@ -19,7 +19,7 @@ parser.add_argument(
     '--data_path',
     help='The path of dataset',
     type=str,
-    default='./dataset')
+    default='./datasets')
 parser.add_argument(
     '--gpu',
     help='The gpu(s) to use',

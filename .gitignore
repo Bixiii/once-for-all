@@ -115,7 +115,7 @@ venv.bak/
 /bash/distributed_imagenet.sh
 
 # data
-dataset
+datasets
 exp
 logs
 runs

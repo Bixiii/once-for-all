@@ -31,6 +31,11 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
+if not args.net_path:
+    args.net_path = 'exp/exp_OFA' + args.net + '_' + args.dataset + '_' + args.experiment_id \
+                    + '/kernel_depth_expand-2-kernel_depth_expand_width/phase2/checkpoint/model_best.pth.tar'
+    print('No network path given, try to load network form default location: ', args.net_path)
+
 # dataset parameters
 if args.dataset == 'cifar10':
     args.image_size = 32
