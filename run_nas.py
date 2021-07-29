@@ -12,16 +12,22 @@ from ofa.nas.search_algorithm import EvolutionFinder
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--net', default='ResNet50', choices=['ResNet50'])
-parser.add_argument('--acc_pred_path', default='', help='Path to the trained accuracy predictor')
 parser.add_argument('--dataset', default='cifar10', choices=['cifar10'])
+parser.add_argument('--experiment_id', default='')
+parser.add_argument('--acc_pred_path', default='', help='Path to the trained accuracy predictor')
 args = parser.parse_args()
+
+if not args.acc_pred_path:
+    args.acc_pred_path = 'exp/exp_OFA' + args.net + '_' + args.dataset + '_' + args.experiment_id \
+                    + '/accuracy_predictor/acc_predictor_model_best.pth.tar'
+    print('No path to accuracy predictor given, try to load form default location: ', args.acc_pred_path)
 
 # NAS constrains
 target_hardware = 'flops'
 latency_constraints = [500, 450, 400, 350, 300, 250, 200, 150]
 
 # CSV
-output_file_name = './logs/ofa_evaluation_results.csv'
+output_file_name = './logs/ofa_optimized_subnets.csv'
 output_file = open(output_file_name, 'w', newline='')
 csv_data_fields = ['target_hardware', 'latency_constraint', 'estimated_latency', 'calculation_time', 'top1_acc', 'net_config']
 csv_writer = csv.DictWriter(output_file, fieldnames=csv_data_fields)
