@@ -18,12 +18,13 @@ class LatencyTable(object):
 
     def __init__(self, local_dir='~/.ofa/latency_tools/',
                  url='https://hanlab.mit.edu/files/proxylessNAS/LatencyTools/mobile_trim.yaml'):
-        if url.startswith('http'):
-            fname = download_url(url, local_dir, overwrite=True)
-        else:
-            fname = url
-        with open(fname, 'r') as fp:
-            self.lut = yaml.load(fp)
+        if url is not None:
+            if url.startswith('http'):
+                fname = download_url(url, local_dir, overwrite=True)
+            else:
+                fname = url
+            with open(fname, 'r') as fp:
+                self.lut = yaml.load(fp)
 
     @staticmethod
     def repr_shape(shape):
