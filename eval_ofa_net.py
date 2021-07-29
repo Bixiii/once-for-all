@@ -16,42 +16,39 @@ import torch.onnx
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    '-p',
-    '--path',
+    '--data_path',
     help='The path of dataset',
     type=str,
-    default='/dataset/imagenet')
+    default='./dataset')
 parser.add_argument(
-    '-g',
     '--gpu',
     help='The gpu(s) to use',
     type=str,
     default='all')
 parser.add_argument(
-    '-b',
     '--batch-size',
     help='The batch on every device for validation',
     type=int,
     default=100)
 parser.add_argument(
-    '-j',
     '--workers',
     help='Number of workers',
     type=int,
     default=0)
 parser.add_argument(
-    '-n',
-    '--net',
+    '--pretrained_net',
     metavar='OFANET',
-    default='ofa_resnet50',
+    default='',
     choices=['ofa_mbv3_d234_e346_k357_w1.0', 'ofa_mbv3_d234_e346_k357_w1.2', 'ofa_proxyless_d234_e346_k357_w1.3',
              'ofa_resnet50'],
     help='OFA networks')
-parser.add_argument('--pretrained', type=bool, default=False, help='Use the pretrained networks from Han Cai et. al')
-parser.add_argument('--net_path', help='Path to saved network model')
-parser.add_argument('--net_type', choices=['ResNet50', 'MobileNetV3'], help='Type of OFA network')
-parser.add_argument('--dataset', choices=['imagenet', 'cifar10'])
+parser.add_argument('--net', default='ResNet50', choices=['ResNet50', 'MobileNetV3'], help='Type of OFA network')
+parser.add_argument('--net_path', default='', help='Path to saved network model')
+parser.add_argument('--dataset', default='cifar10', choices=['imagenet', 'cifar10'])
+parser.add_argument('--export_onnx', default=False, help='Export model as ONNX')
 args = parser.parse_args()
+
+output_file = './logs/ofa_evaluation_results.csv'
 
 if args.dataset == 'cifar10':
     args.image_size = 32
@@ -65,13 +62,7 @@ else:
 
 def export_as_onnx(net, file_name):
     x = torch.randn(1, 3, 32, 32, requires_grad=True).cpu()
-
-    torch.onnx.export(
-        net,
-        x,
-        'logs/' + file_name + '.onnx',
-        export_params=True,
-        )
+    torch.onnx.export(net, x, file_name, export_params=True)
 
 
 if args.gpu == 'all':
@@ -81,13 +72,13 @@ else:
     device_list = [int(_) for _ in args.gpu.split(',')]
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 args.batch_size = args.batch_size * max(len(device_list), 1)
-ImagenetDataProvider.DEFAULT_PATH = args.path
+ImagenetDataProvider.DEFAULT_PATH = args.data_path
 
-if args.pretrained:
-    ofa_network = ofa_net(args.net, pretrained=True)
+# select and load a network
+if args.pretrained_net:
+    ofa_network = ofa_net(args.pretrained_net, pretrained=True)
 else:
-
-    if args.net_type == 'ResNet50':
+    if args.net == 'ResNet50':
         ofa_network = OFAResNets(
             n_classes=args.num_classes,
             dropout_rate=0,
@@ -97,7 +88,7 @@ else:
             small_input_stem=True,
             dataset=args.dataset,
         )
-    elif args.net_type == 'MobileNetV3':
+    elif args.net == 'MobileNetV3':
         ofa_network = net = OFAMobileNetV3(
             ks_list=[3, 5, 7],
             expand_ratio_list=[3, 4, 6],
@@ -113,47 +104,41 @@ else:
 run_config = ImagenetRunConfig(test_batch_size=args.batch_size, n_worker=args.workers, dataset=args.dataset)
 run_config.data_provider.assign_active_img_size(args.image_size)  # assign image size: 128, 132, ..., 224
 
+csv_data_fields = ['params', 'flops', 'loss', 'top1', 'top5', 'net_config']
+csv_writer = csv.DictWriter(open(output_file, 'w', newline=''), fieldnames=csv_data_fields)
+csv_writer.writeheader()
+
+net_config_list = []
+# net_config_list.append({'d': [2, 2, 2, 2, 2], 'e': [0.25, 0.25, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.25, 0.35, 0.25, 0.25, 0.35, 0.25, 0.35], 'w': [1, 2, 2, 2, 2], 'image_size': 32})  # 600 - 95.72
+# net_config_list.append({'d': [2, 2, 2, 1, 0], 'e': [0.25, 0.25, 0.2, 0.35, 0.35, 0.2, 0.25, 0.25, 0.35, 0.25, 0.25, 0.25, 0.2, 0.2, 0.25, 0.2, 0.2, 0.2], 'w': [1, 2, 0, 2, 2], 'image_size': 32})  # 300 - 95.65
+# net_config_list.append({'d': [2, 0, 1, 1, 0], 'e': [0.2, 0.2, 0.25, 0.2, 0.2, 0.2, 0.2, 0.25, 0.35, 0.25, 0.25, 0.25, 0.2, 0.25, 0.2, 0.2, 0.2, 0.2], 'w': [2, 2, 0, 1, 0], 'image_size': 32})  # 150 - 95.28
+
 """ Randomly sample a sub-network, 
     you can also manually set the sub-network using: 
         ofa_network.set_active_subnet(ks=7, e=6, d=4) 
 """
-evaluation_data = []
-evaluation_data_fields = ['params', 'flops', 'loss', 'top1', 'top5', 'net_config']
+if not len(net_config_list):
+    net_config_list.append(ofa_network.sample_active_subnet())
+    print('Random subnet sampled ...')
 
-for i in range(100):
-    net_config = ofa_network.sample_active_subnet()
-    # random_net_config = {'d': [2, 1, 0, 2, 2], 'e': [0.35, 0.35, 0.2, 0.25, 0.25, 0.35, 0.25, 0.35, 0.2, 0.35, 0.35, 0.25, 0.25, 0.35, 0.2, 0.25, 0.35, 0.2], 'w': [1, 2, 0, 0, 2]}
-    # smallest_net_config = {'d': [0, 0, 0, 0, 0], 'e': [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2], 'w': [0, 0, 0, 0, 0]}
-    # largest_net_config = {'d': [2, 2, 2, 2, 2], 'e': [0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35], 'w': [2, 2, 2, 2, 2]}
-    # net_config = largest_net_config
-    # ofa_network.set_active_subnet(**net_config)
-
-    """ Test sampled subnet 
-    """
+for i, net_config in enumerate(net_config_list):
+    ofa_network.set_active_subnet(**net_config)
     subnet = ofa_network.get_active_subnet(preserve_weight=True)
     net_info = get_net_info(subnet, [3, args.image_size, args.image_size], print_info=False)
     run_manager = RunManager('.tmp/eval_subnet', subnet, run_config, init=False)
     run_manager.reset_running_statistics(net=subnet)
 
-    # print('Test random subnet:')
-    # print(subnet.module_str)
-
     loss, (top1, top5) = run_manager.validate(net=subnet)
-    # print('Results subnet: loss=%.5f,\t top1=%.1f,\t top5=%.1f' % (loss, top1, top5))
-
     net_info['loss'] = loss
     net_info['top1'] = top1
     net_info['top5'] = top5
     net_info['net_config'] = net_config
 
-    evaluation_data.append(net_info)
+    if args.export_onnx:
+        export_as_onnx(subnet.cpu(), 'accuracy_' + str(net_info['top1']) + '_OFAResNet50_' + str(i) + '.onnx')
 
+    csv_writer.writerow(net_info)
 
-writer = csv.DictWriter(open('eval_data_points.csv', 'w', newline=''), fieldnames=evaluation_data_fields)
-writer.writeheader()
-for data in evaluation_data:
-    writer.writerow(data)
-# print('Eval result: ', str(net_info))
-
-# print('Export selected subnet as ONNX')
-# export_as_onnx(subnet.cpu(), 'subnet.onnx')
+    print('\n\t\tOFA subnet\n------------------------------')
+    for key in net_info:
+        print('{:<10} | {:<20}'.format(key, str(net_info[key])))
