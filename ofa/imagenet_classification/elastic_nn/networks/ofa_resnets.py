@@ -6,14 +6,15 @@ from ofa.utils.layers import IdentityLayer, ResidualBlock
 from ofa.imagenet_classification.networks import ResNets
 from ofa.utils import make_divisible, val2list, MyNetwork
 
-__all__ = ['OFAResNets']
+__all__ = ['OFAResNets', 'OFAResNet50', 'OFAResNet34']
 
 
 class OFAResNets(ResNets):
 
     def __init__(self, n_classes=1000, bn_param=(0.1, 1e-5), dropout_rate=0,
                  depth_list=2, expand_ratio_list=0.25, width_mult_list=1.0,
-                 dataset='imagenet', small_input_stem=None, downsample_mode='', block_typ=None, base_depth_list=None):
+                 dataset='imagenet', small_input_stem=None, downsample_mode='', block_typ=None, base_depth_list=None,
+                 base_width_list=None, max_pooling=None):
 
         self.depth_list = val2list(depth_list)
         self.expand_ratio_list = val2list(expand_ratio_list)
@@ -26,7 +27,8 @@ class OFAResNets(ResNets):
         # net parameter
         self.dataset = dataset
         self.block_typ = DynamicResNetBottleneckBlock if not block_typ else block_typ
-        self.base_depth_list = ResNets.BASE_DEPTH_LIST if not base_depth_list else base_depth_list
+        self.base_depth_list = ResNets.BASE_DEPTH_LIST.copy() if not base_depth_list else base_depth_list
+        self.stage_width_list = ResNets.STAGE_WIDTH_LIST.copy() if not base_width_list else base_width_list
 
         input_channel = [
             make_divisible(64 * width_mult, MyNetwork.CHANNEL_DIVISIBLE) for width_mult in self.width_mult_list
@@ -35,9 +37,8 @@ class OFAResNets(ResNets):
             make_divisible(channel // 2, MyNetwork.CHANNEL_DIVISIBLE) for channel in input_channel
         ]
 
-        stage_width_list = ResNets.STAGE_WIDTH_LIST.copy()
-        for i, width in enumerate(stage_width_list):
-            stage_width_list[i] = [
+        for i, width in enumerate(self.stage_width_list):
+            self.stage_width_list[i] = [
                 make_divisible(width * width_mult, MyNetwork.CHANNEL_DIVISIBLE) for width_mult in self.width_mult_list
             ]
 
@@ -47,13 +48,13 @@ class OFAResNets(ResNets):
         if dataset == 'imagenet':
             input_stem_kernel_size = 7
             input_stem_stride = 2
-            max_pooling = True
+            self.max_pooling = True if not max_pooling else max_pooling
             self.downsample_mode = 'avgpool_conv' if not downsample_mode else downsample_mode
             self.small_input_stem = False if not small_input_stem else small_input_stem
         elif dataset == 'cifar10':
             input_stem_kernel_size = 3
             input_stem_stride = 1
-            max_pooling = False
+            self.max_pooling = False if not max_pooling else max_pooling
             self.downsample_mode = 'conv' if not downsample_mode else downsample_mode
             self.small_input_stem = True if not small_input_stem else small_input_stem
 
@@ -75,7 +76,7 @@ class OFAResNets(ResNets):
 
         # blocks
         blocks = []
-        for d, width, s in zip(n_block_list, stage_width_list, stride_list):
+        for d, width, s in zip(n_block_list, self.stage_width_list, stride_list):
             for i in range(d):
                 stride = s if i == 0 else 1
                 bottleneck_block = block_typ(
@@ -323,3 +324,21 @@ class OFAResNet50(OFAResNets):
                                           width_mult_list, dataset, small_input_stem, downsample_mode, self.block_typ,
                                           self.base_depth_list)
 
+
+class OFAResNet34(OFAResNets):
+
+    def __init__(self, n_classes=1000, bn_param=(0.1, 1e-5), dropout_rate=0,
+                 depth_list=2, expand_ratio_list=0.25, width_mult_list=1.0,
+                 dataset='imagenet', small_input_stem=None, downsample_mode=''):
+
+        self.block_typ = DynamicResNetBasicBlock
+        self.base_depth_list = [1, 2, 4, 2]
+        self.base_width_list = [64, 128, 256, 512]
+        self.downsample_mode = 'conv' if not downsample_mode else downsample_mode
+
+        super(OFAResNet34, self).__init__(n_classes, bn_param=bn_param, dropout_rate=dropout_rate,
+                                          depth_list=depth_list, expand_ratio_list=expand_ratio_list,
+                                          width_mult_list=width_mult_list, dataset=dataset,
+                                          small_input_stem=small_input_stem, downsample_mode=self.downsample_mode,
+                                          block_typ=self.block_typ, base_depth_list=self.base_depth_list,
+                                          base_width_list=self.base_width_list)
