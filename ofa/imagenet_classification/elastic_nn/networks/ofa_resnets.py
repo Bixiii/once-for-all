@@ -1,7 +1,7 @@
 import random
 
 from ofa.imagenet_classification.elastic_nn.modules.dynamic_layers import DynamicConvLayer, DynamicLinearLayer
-from ofa.imagenet_classification.elastic_nn.modules.dynamic_layers import DynamicResNetBottleneckBlock
+from ofa.imagenet_classification.elastic_nn.modules.dynamic_layers import DynamicResNetBottleneckBlock, DynamicResNetBasicBlock
 from ofa.utils.layers import IdentityLayer, ResidualBlock
 from ofa.imagenet_classification.networks import ResNets
 from ofa.utils import make_divisible, val2list, MyNetwork
@@ -12,17 +12,21 @@ __all__ = ['OFAResNets']
 class OFAResNets(ResNets):
 
     def __init__(self, n_classes=1000, bn_param=(0.1, 1e-5), dropout_rate=0,
-                 depth_list=2, expand_ratio_list=0.25, width_mult_list=1.0, small_input_stem=False, dataset='imagenet'):
+                 depth_list=2, expand_ratio_list=0.25, width_mult_list=1.0,
+                 dataset='imagenet', small_input_stem=None, downsample_mode='', block_typ=None, base_depth_list=None):
 
         self.depth_list = val2list(depth_list)
         self.expand_ratio_list = val2list(expand_ratio_list)
         self.width_mult_list = val2list(width_mult_list)
-        self.small_input_stem = small_input_stem
         # sort
         self.depth_list.sort()
         self.expand_ratio_list.sort()
         self.width_mult_list.sort()
+
+        # net parameter
         self.dataset = dataset
+        self.block_typ = DynamicResNetBottleneckBlock if not block_typ else block_typ
+        self.base_depth_list = ResNets.BASE_DEPTH_LIST if not base_depth_list else base_depth_list
 
         input_channel = [
             make_divisible(64 * width_mult, MyNetwork.CHANNEL_DIVISIBLE) for width_mult in self.width_mult_list
@@ -37,26 +41,28 @@ class OFAResNets(ResNets):
                 make_divisible(width * width_mult, MyNetwork.CHANNEL_DIVISIBLE) for width_mult in self.width_mult_list
             ]
 
-        n_block_list = [base_depth + max(self.depth_list) for base_depth in ResNets.BASE_DEPTH_LIST]
+        n_block_list = [base_depth + max(self.depth_list) for base_depth in base_depth_list]
         stride_list = [1, 2, 2, 2]
 
         if dataset == 'imagenet':
             input_stem_kernel_size = 7
             input_stem_stride = 2
             max_pooling = True
-            downsample_mode = 'avgpool_conv'
+            self.downsample_mode = 'avgpool_conv' if not downsample_mode else downsample_mode
+            self.small_input_stem = False if not small_input_stem else small_input_stem
         elif dataset == 'cifar10':
             input_stem_kernel_size = 3
             input_stem_stride = 1
             max_pooling = False
-            downsample_mode = 'conv'
+            self.downsample_mode = 'conv' if not downsample_mode else downsample_mode
+            self.small_input_stem = True if not small_input_stem else small_input_stem
 
         # build input stem
-        if small_input_stem:
+        if self.small_input_stem:
             input_stem = [
-                DynamicConvLayer(val2list(3), input_channel, input_stem_kernel_size, stride=input_stem_stride, use_bn=True, act_func='relu'),
+                DynamicConvLayer(val2list(3), input_channel, input_stem_kernel_size, stride=input_stem_stride,
+                                 use_bn=True, act_func='relu'),
             ]
-            downsample_mode = 'conv'
         else:
             input_stem = [
                 DynamicConvLayer(val2list(3), mid_input_channel, 3, stride=2, use_bn=True, act_func='relu'),
@@ -72,9 +78,9 @@ class OFAResNets(ResNets):
         for d, width, s in zip(n_block_list, stage_width_list, stride_list):
             for i in range(d):
                 stride = s if i == 0 else 1
-                bottleneck_block = DynamicResNetBottleneckBlock(
+                bottleneck_block = block_typ(
                     input_channel, width, expand_ratio_list=self.expand_ratio_list,
-                    kernel_size=3, stride=stride, act_func='relu', downsample_mode=downsample_mode,
+                    kernel_size=3, stride=stride, act_func='relu', downsample_mode=self.downsample_mode,
                 )
                 blocks.append(bottleneck_block)
                 input_channel = width
@@ -247,7 +253,8 @@ class OFAResNets(ResNets):
                     self.input_stem[1].conv.get_active_subnet(self.input_stem[0].active_out_channel, preserve_weight),
                     IdentityLayer(self.input_stem[0].active_out_channel, self.input_stem[0].active_out_channel)
                 ))
-            input_stem.append(self.input_stem[2].get_active_subnet(self.input_stem[0].active_out_channel, preserve_weight))
+            input_stem.append(
+                self.input_stem[2].get_active_subnet(self.input_stem[0].active_out_channel, preserve_weight))
             input_channel = self.input_stem[2].active_out_channel
         else:
             input_channel = self.input_stem[0].active_out_channel
@@ -272,7 +279,8 @@ class OFAResNets(ResNets):
                 input_stem_config.append({
                     'name': ResidualBlock.__name__,
                     'conv': self.input_stem[1].conv.get_active_subnet_config(self.input_stem[0].active_out_channel),
-                    'shortcut': IdentityLayer(self.input_stem[0].active_out_channel, self.input_stem[0].active_out_channel),
+                    'shortcut': IdentityLayer(self.input_stem[0].active_out_channel,
+                                              self.input_stem[0].active_out_channel),
                 })
             input_stem_config.append(self.input_stem[2].get_active_subnet_config(self.input_stem[0].active_out_channel))
             input_channel = self.input_stem[2].active_out_channel
@@ -300,3 +308,18 @@ class OFAResNets(ResNets):
     def re_organize_middle_weights(self, expand_ratio_stage=0):
         for block in self.blocks:
             block.re_organize_middle_weights(expand_ratio_stage)
+
+
+class OFAResNet50(OFAResNets):
+
+    def __init__(self, n_classes=1000, bn_param=(0.1, 1e-5), dropout_rate=0,
+                 depth_list=2, expand_ratio_list=0.25, width_mult_list=1.0,
+                 dataset='imagenet', small_input_stem=None, downsample_mode=''):
+
+        self.block_typ = DynamicResNetBottleneckBlock
+        self.base_depth_list = [2, 2, 4, 2]
+
+        super(OFAResNet50, self).__init__(n_classes, bn_param, dropout_rate, depth_list, expand_ratio_list,
+                                          width_mult_list, dataset, small_input_stem, downsample_mode, self.block_typ,
+                                          self.base_depth_list)
+

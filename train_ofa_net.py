@@ -11,7 +11,7 @@ import logging
 import torch
 
 from ofa.imagenet_classification.elastic_nn.modules.dynamic_op import DynamicSeparableConv2d
-from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3, OFAResNets
+from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3, OFAResNets, OFAResNet50
 from ofa.imagenet_classification.run_manager import ImagenetRunConfig, DistributedImageNetRunConfig
 from ofa.imagenet_classification.networks import MobileNetV3Large, ResNet50
 from ofa.imagenet_classification.run_manager import RunManager, DistributedRunManager
@@ -458,7 +458,7 @@ if __name__ == '__main__':
         )
     elif args.net == 'ResNet50':
         small_input_stem = True if args.dataset == 'cifar10' else False
-        net = OFAResNets(
+        net = OFAResNet50(
             n_classes=run_config.data_provider.n_classes,
             bn_param=(args.bn_momentum, args.bn_eps),
             dropout_rate=args.dropout,
