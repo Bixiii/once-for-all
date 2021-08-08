@@ -11,12 +11,13 @@ import logging
 import torch
 
 from ofa.imagenet_classification.elastic_nn.modules.dynamic_op import DynamicSeparableConv2d
-from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3, OFAResNets, OFAResNet50
+from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3, OFAResNets, OFAResNet50, OFAResNet34
 from ofa.imagenet_classification.run_manager import ImagenetRunConfig, DistributedImageNetRunConfig
-from ofa.imagenet_classification.networks import MobileNetV3Large, ResNet50
+from ofa.imagenet_classification.networks import MobileNetV3Large, ResNet50, ResNet34
 from ofa.imagenet_classification.run_manager import RunManager, DistributedRunManager
 from ofa.utils import download_url, MyRandomResizedCrop
 from ofa.imagenet_classification.elastic_nn.training.progressive_shrinking import load_models
+from train_utils import set_progressive_shringking_paramters
 
 from settings import use_hvd, tiny_gpu
 
@@ -38,6 +39,7 @@ parser.add_argument(
     choices=[
         'MobileNetV3',
         'ResNet50',
+        'ResNet34',
     ]
 )
 parser.add_argument(
@@ -65,6 +67,7 @@ parser.add_argument(
 
 args = parser.parse_args()
 
+args.use_hvd = use_hvd
 args.experiment_folder = 'exp/exp_OFA' + args.net + '_' + args.dataset + '_' + args.experiment_id + '/'
 os.makedirs(args.experiment_folder, exist_ok=True)
 logging.basicConfig(filename=args.experiment_folder+'program_flow.log', level=logging.DEBUG,
@@ -78,7 +81,7 @@ logging.basicConfig(filename=args.experiment_folder+'program_flow.log', level=lo
 
 logging.info('***Initialized logger***')
 
-if args.net == 'ResNet50' and args.pretrained:
+if args.net.__contains__('ResNet') and args.pretrained:
     raise NotImplementedError
 
 # Initialize Horovod
@@ -98,219 +101,8 @@ else:
     logging.error('Need GPU to run OFA Training')
     raise EnvironmentError
 
-args.image_size = None
-args.width_mult_list = None
-if args.task == 'basenet':
-    logging.info('Set parameter for training basenet')
-    args.target_path = args.experiment_folder + 'normal'
-    args.dynamic_batch_size = 1
-    args.n_epochs = 450
-    if args.dataset == 'imagenet':
-        args.base_lr = 4e-2
-    elif args.dataset == 'cifar10':
-        args.base_lr = 8e-2
-    args.warmup_epochs = 0
-    args.warmup_lr = -1
-    args.phase = 0
-    if args.net == 'MobileNetV3':
-        args.ks_list = '7'
-        args.expand_list = '6'
-        args.depth_list = '4'
-    elif args.net == 'ResNet50':
-        args.ks_list = '3'
-        args.width_mult_list = '1.0'
-        args.expand_list = '0.35'
-        args.depth_list = '2'
-elif args.task == 'kernel':
-    logging.debug('Set parameter for training elastic kernel')
-    if args.pretrained:
-        if use_hvd:
-            args.source_path = download_url(
-                'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K7',
-                model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
-            )
-        else:
-            args.source_path = download_url(
-                'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K7',
-                model_dir='.torch/ofa_checkpoints/'
-            )
-    else:
-        args.source_path = args.experiment_folder + 'normal/checkpoint/model_best.pth.tar'
-    args.target_path = args.experiment_folder + 'normal-2-kernel'
-    args.dynamic_batch_size = 1
-    args.n_epochs = 120
-    args.base_lr = 3e-2
-    args.warmup_epochs = 5
-    args.warmup_lr = -1
-    if args.net == 'MobileNetV3':
-        args.ks_list = '3,5,7'
-        args.expand_list = '6'
-        args.depth_list = '4'
-    if args.net == 'ResNet50':
-        raise NotImplementedError  # kernel stage not applicable for ResNet
-elif args.task == 'depth':
-    logging.debug('Set parameter for training elastic depth')
-    args.target_path = args.experiment_folder + 'kernel-2-kernel_depth/phase%d' % args.phase
-    args.dynamic_batch_size = 2
-    if args.phase == 1:
-        if args.net == 'MobileNetV3':
-            if args.pretrained:
-                if use_hvd:
-                    args.source_path = download_url(
-                        'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K357',
-                        model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
-                    )
-                else:
-                    args.source_path = download_url(
-                        'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D4_E6_K357',
-                        model_dir='.torch/ofa_checkpoints/'
-                    )
-            else:
-                args.source_path = args.experiment_folder + 'normal-2-kernel/checkpoint/model_best.pth.tar'
-        elif args.net == 'ResNet50':
-            args.source_path = args.experiment_folder + 'normal/checkpoint/model_best.pth.tar'
-        args.n_epochs = 25
-        args.base_lr = 2.5e-3
-        args.warmup_epochs = 0
-        args.warmup_lr = -1
-        if args.net == 'MobileNetV3':
-            args.ks_list = '3,5,7'
-            args.expand_list = '6'
-            args.depth_list = '3,4'
-        elif args.net == 'ResNet50':
-            args.ks_list = '3'
-            args.width_mult_list = '1.0'
-            args.expand_list = '0.35'
-            args.depth_list = '1,2'
-    else:
-        if args.pretrained:
-            if use_hvd:
-                args.source_path = download_url(
-                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D34_E6_K357',
-                    model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
-                )
-            else:
-                args.source_path = download_url(
-                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D34_E6_K357',
-                    model_dir='.torch/ofa_checkpoints/'
-                )
-        else:
-            args.source_path = args.experiment_folder + 'kernel-2-kernel_depth/phase1/checkpoint/model_best.pth.tar'
-        args.n_epochs = 120
-        args.base_lr = 7.5e-3
-        args.warmup_epochs = 5
-        args.warmup_lr = -1
-        if args.net == 'MobileNetV3':
-            args.ks_list = '3,5,7'
-            args.expand_list = '6'
-            args.depth_list = '2,3,4'
-        elif args.net == 'ResNet50':
-            args.ks_list = '3'
-            args.width_mult_list = '1.0'
-            args.expand_list = '0.35'
-            args.depth_list = '0,1,2'
-elif args.task == 'expand':
-    logging.debug('Set parameter for training elastic expand')
-    args.target_path = args.experiment_folder + 'kernel_depth-2-kernel_depth_expand/phase%d' % args.phase
-    args.dynamic_batch_size = 4
-    if args.phase == 1:
-        if args.pretrained:
-            if use_hvd:
-                args.source_path = download_url(
-                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D234_E6_K357',
-                    model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
-                )
-            else:
-                args.source_path = download_url(
-                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D234_E6_K357',
-                    model_dir='.torch/ofa_checkpoints/'
-                )
-        else:
-            args.source_path = args.experiment_folder + 'kernel-2-kernel_depth/phase2/checkpoint/model_best.pth.tar'
-        args.n_epochs = 25
-        args.base_lr = 2.5e-3
-        args.warmup_epochs = 0
-        args.warmup_lr = -1
-        if args.net == 'MobileNetV3':
-            args.ks_list = '3,5,7'
-            args.expand_list = '4,6'
-            args.depth_list = '2,3,4'
-        elif args.net == 'ResNet50':
-            args.ks_list = '3'
-            args.width_mult_list = '1.0'
-            args.expand_list = '0.25,0.35'
-            args.depth_list = '0,1,2'
-    else:
-        if args.pretrained:
-            if use_hvd:
-                args.source_path = download_url(
-                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D234_E46_K357',
-                    model_dir='.torch/ofa_checkpoints/%d' % hvd.rank()
-                )
-            else:
-                args.source_path = download_url(
-                    'https://hanlab.mit.edu/files/OnceForAll/ofa_checkpoints/ofa_D234_E46_K357',
-                    model_dir='.torch/ofa_checkpoints/'
-                )
-        else:
-            args.source_path = args.experiment_folder + 'kernel_depth-2-kernel_depth_expand/phase1/checkpoint/model_best.pth.tar'
-        args.n_epochs = 120
-        args.base_lr = 7.5e-3
-        args.warmup_epochs = 5
-        args.warmup_lr = -1
-        if args.net == 'MobileNetV3':
-            args.ks_list = '3,5,7'
-            args.expand_list = '3,4,6'
-            args.depth_list = '2,3,4'
-        elif args.net == 'ResNet50':
-            args.ks_list = '3'
-            args.width_mult_list = '1.0'
-            args.expand_list = '0.20,0.25,0.35'
-            args.depth_list = '0,1,2'
-elif args.task == 'width':
-    logging.debug('Set parameter for training elastic width')
-    args.target_path = args.experiment_folder + 'kernel_depth_expand-2-kernel_depth_expand_width/phase%d' % args.phase
-    args.dynamic_batch_size = 4
-    if args.phase == 1:
-        if args.pretrained:
-            raise NotImplementedError
-        else:
-            args.source_path = args.experiment_folder + 'kernel_depth-2-kernel_depth_expand/phase2/checkpoint/model_best.pth.tar'
-        args.n_epochs = 25
-        args.base_lr = 2.5e-3
-        args.warmup_epochs = 0
-        args.warmup_lr = -1
-        if args.net == 'MobileNetV3':
-            raise NotImplementedError
-            # args.ks_list = '3,5,7'
-            # args.expand_list = '4,6'
-            # args.depth_list = '2,3,4'
-        elif args.net == 'ResNet50':
-            args.ks_list = '3'
-            args.width_mult_list = '0.8,1.0'
-            args.expand_list = '0.20,0.25,0.35'
-            args.depth_list = '0,1,2'
-    else:
-        if args.pretrained:
-            raise NotImplementedError
-        else:
-            args.source_path = args.experiment_folder + 'kernel_depth_expand-2-kernel_depth_expand_width/phase1/checkpoint/model_best.pth.tar'
-        args.n_epochs = 120
-        args.base_lr = 7.5e-3
-        args.warmup_epochs = 5
-        args.warmup_lr = -1
-        if args.net == 'MobileNetV3':
-            raise NotImplementedError
-            # args.ks_list = '3,5,7'
-            # args.expand_list = '3,4,6'
-            # args.depth_list = '2,3,4'
-        elif args.net == 'ResNet50':
-            args.ks_list = '3'
-            args.width_mult_list = '0.65,0.8,1.0'
-            args.expand_list = '0.20,0.25,0.35'
-            args.depth_list = '0,1,2'
-else:
-    raise NotImplementedError
+args = set_progressive_shringking_paramters(args)
+logging.info(args.log_info)
 args.manual_seed = 0
 
 args.lr_schedule_type = 'cosine'
@@ -438,7 +230,7 @@ if __name__ == '__main__':
     args.ks_list = [int(ks) for ks in args.ks_list.split(',')]
     if args.net == 'MobileNetV3':
         args.expand_list = [int(e) for e in args.expand_list.split(',')]
-    elif args.net == 'ResNet50':
+    elif args.net.__contains__('ResNet'):
         args.expand_list = [float(e) for e in args.expand_list.split(",")]
     args.depth_list = [int(d) for d in args.depth_list.split(',')]
 
@@ -468,6 +260,18 @@ if __name__ == '__main__':
             small_input_stem=small_input_stem,
             dataset=args.dataset
         )
+    elif args.net == 'ResNet34':
+        small_input_stem = True if args.dataset == 'cifar10' else False
+        net = OFAResNet34(
+            n_classes=run_config.data_provider.n_classes,
+            bn_param=(args.bn_momentum, args.bn_eps),
+            dropout_rate=args.dropout,
+            depth_list=args.depth_list,
+            width_mult_list=args.width_mult_list,
+            small_input_stem=small_input_stem,
+            dataset=args.dataset
+        )
+
 
     # teacher model
     if args.kd_ratio > 0:
@@ -490,6 +294,13 @@ if __name__ == '__main__':
                 width_mult=1.0,
                 expand_ratio=0.35,
                 depth_list=[4, 4, 6, 4],
+                dataset=args.dataset
+            )
+        elif args.net == 'ResNet34':
+            args.teacher_model = ResNet34(
+                n_classes=run_config.data_provider.n_classes,
+                bn_param=(args.bn_momentum, args.bn_eps),
+                dropout_rate=args.dropout,
                 dataset=args.dataset
             )
         args.teacher_model.cuda()
