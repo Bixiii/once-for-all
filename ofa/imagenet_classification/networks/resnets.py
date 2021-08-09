@@ -1,10 +1,10 @@
 import torch.nn as nn
 
 from ofa.utils.layers import set_layer_from_config, ConvLayer, IdentityLayer, LinearLayer
-from ofa.utils.layers import ResNetBottleneckBlock, ResidualBlock
+from ofa.utils.layers import ResNetBottleneckBlock, ResidualBlock, ResNetBasicBlock
 from ofa.utils import make_divisible, MyNetwork, MyGlobalAvgPool2d
 
-__all__ = ['ResNets', 'ResNet50', 'ResNet50D']
+__all__ = ['ResNets', 'ResNet50', 'ResNet50D', 'ResNet34']
 
 
 class ResNets(MyNetwork):
@@ -217,6 +217,54 @@ class ResNet50D(ResNets):
         classifier = LinearLayer(input_channel, n_classes, dropout_rate=dropout_rate)
 
         super(ResNet50D, self).__init__(input_stem, blocks, classifier)
+
+        # set bn param
+        self.set_bn_param(*bn_param)
+
+
+class ResNet34(ResNets):
+
+    def __init__(self, n_classes=1000, width_mult=1.0, bn_param=(0.1, 1e-5), dropout_rate=0,
+                 expand_ratio=None, depth_param=None, depth_list=None, dataset=None):
+
+        input_channel = 64
+        stage_width_list = [64, 128, 256, 512]
+        for i, width in enumerate(stage_width_list):
+            stage_width_list[i] = make_divisible(width * width_mult, MyNetwork.CHANNEL_DIVISIBLE)
+
+        if depth_list is None:
+            depth_list = [3, 4, 6, 3]
+            if depth_param is not None:
+                for i, depth in enumerate(ResNets.BASE_DEPTH_LIST):
+                    depth_list[i] = depth + depth_param
+        elif len(depth_list) != 4:
+            raise ValueError('Depth list for ResNet34 should be of size 4')
+
+        stride_list = [1, 2, 2, 2]
+
+        input_stem_kernel_size = 3 if dataset == 'cifar10' else 7
+        input_stem_stride = 1 if dataset == 'cifar10' else 2
+
+        # build input stem
+        input_stem = [ConvLayer(
+            3, input_channel, kernel_size=input_stem_kernel_size, stride=input_stem_stride, use_bn=True, act_func='relu', ops_order='weight_bn_act',
+        )]
+
+        # blocks
+        blocks = []
+        for d, width, s in zip(depth_list, stage_width_list, stride_list):
+            for i in range(d):
+                stride = s if i == 0 else 1
+                basic_block = ResNetBasicBlock(
+                    input_channel, width, kernel_size=3, stride=stride,
+                    act_func='relu', downsample_mode='conv',
+                )
+                blocks.append(basic_block)
+                input_channel = width
+        # classifier
+        classifier = LinearLayer(input_channel, n_classes, dropout_rate=dropout_rate)
+
+        super(ResNet34, self).__init__(input_stem, blocks, classifier, max_pooling=(dataset != 'cifar10'))
 
         # set bn param
         self.set_bn_param(*bn_param)

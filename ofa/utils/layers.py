@@ -13,7 +13,7 @@ from ofa.utils import build_activation, make_divisible
 __all__ = [
     'set_layer_from_config',
     'ConvLayer', 'IdentityLayer', 'LinearLayer', 'MultiHeadLinearLayer', 'ZeroLayer', 'MBConvLayer',
-    'ResidualBlock', 'ResNetBottleneckBlock',
+    'ResidualBlock', 'ResNetBottleneckBlock', 'ResNetBasicBlock'
 ]
 
 
@@ -32,6 +32,7 @@ def set_layer_from_config(layer_config):
         ##########################################################
         ResidualBlock.__name__: ResidualBlock,
         ResNetBottleneckBlock.__name__: ResNetBottleneckBlock,
+        ResNetBasicBlock.__name__: ResNetBasicBlock,
     }
 
     layer_name = layer_config.pop('name')
@@ -646,3 +647,88 @@ class ResNetBottleneckBlock(MyModule):
     @staticmethod
     def build_from_config(config):
         return ResNetBottleneckBlock(**config)
+
+
+class ResNetBasicBlock(MyModule):
+
+    def __init__(self, in_channels, out_channels,
+                 kernel_size=3, stride=1, expand_ratio=0.25, mid_channels=None, act_func='relu', groups=1,
+                 downsample_mode='avgpool_conv'):
+        super(ResNetBasicBlock, self).__init__()
+
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.act_func = act_func
+        self.groups = groups
+
+        self.downsample_mode = downsample_mode
+
+        # build modules
+        self.conv1 = nn.Sequential(OrderedDict([
+            ('conv', nn.Conv2d(self.in_channels, self.out_channels, (kernel_size, kernel_size), (stride, stride), (1, 1), bias=False)),
+            ('bn', nn.BatchNorm2d(self.out_channels)),
+            ('act', build_activation(self.act_func, inplace=True)),
+        ]))
+
+        self.conv3 = nn.Sequential(OrderedDict([
+            ('conv', nn.Conv2d(self.out_channels, self.out_channels, (kernel_size, kernel_size), (1, 1), (1, 1), bias=False)),
+            ('bn', nn.BatchNorm2d(self.out_channels)),
+        ]))
+
+        if stride == 1 and in_channels == out_channels:
+            self.downsample = IdentityLayer(in_channels, out_channels)
+        elif self.downsample_mode == 'conv':
+            self.downsample = nn.Sequential(OrderedDict([
+                ('conv', nn.Conv2d(in_channels, out_channels, 1, stride, 0, bias=False)),
+                ('bn', nn.BatchNorm2d(out_channels)),
+            ]))
+        elif self.downsample_mode == 'avgpool_conv':
+            self.downsample = nn.Sequential(OrderedDict([
+                ('avg_pool', nn.AvgPool2d(kernel_size=stride, stride=stride, padding=0, ceil_mode=True)),
+                ('conv', nn.Conv2d(in_channels, out_channels, 1, 1, 0, bias=False)),
+                ('bn', nn.BatchNorm2d(out_channels)),
+            ]))
+        else:
+            raise NotImplementedError
+
+        self.final_act = build_activation(self.act_func, inplace=True)
+
+    def forward(self, x):
+        residual = self.downsample(x)
+
+        x = self.conv1(x)
+        x = self.conv3(x)
+
+        x = x + residual
+        x = self.final_act(x)
+        return x
+
+    @property
+    def module_str(self):
+        return '(%s, %s)' % (
+            '%dx%d_BasicConv_%d->%d_S%d_G%d' % (
+                self.kernel_size, self.kernel_size, self.in_channels, self.out_channels,
+                self.stride, self.groups
+            ),
+            'Identity' if isinstance(self.downsample, IdentityLayer) else self.downsample_mode,
+        )
+
+    @property
+    def config(self):
+        return {
+            'name': ResNetBasicBlock.__name__,
+            'in_channels': self.in_channels,
+            'out_channels': self.out_channels,
+            'kernel_size': self.kernel_size,
+            'stride': self.stride,
+            'act_func': self.act_func,
+            'groups': self.groups,
+            'downsample_mode': self.downsample_mode,
+        }
+
+    @staticmethod
+    def build_from_config(config):
+        return ResNetBasicBlock(**config)

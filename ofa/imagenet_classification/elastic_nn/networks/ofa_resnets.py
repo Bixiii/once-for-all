@@ -79,6 +79,8 @@ class OFAResNets(ResNets):
         for d, width, s in zip(n_block_list, self.stage_width_list, stride_list):
             for i in range(d):
                 stride = s if i == 0 else 1
+                if len(blocks) == 0:
+                    input_channel.append(-1)  # dirty workaround to enable first dynamic block in small ResNets <- not tested for crossdefects O.o
                 bottleneck_block = block_typ(
                     input_channel, width, expand_ratio_list=self.expand_ratio_list,
                     kernel_size=3, stride=stride, act_func='relu', downsample_mode=self.downsample_mode,
@@ -194,16 +196,21 @@ class OFAResNets(ResNets):
             if e is not None:
                 block.active_expand_ratio = e
 
+        width_mult_idx = 1
         if not self.small_input_stem:
             if width_mult[0] is not None:
                 self.input_stem[1].conv.active_out_channel = self.input_stem[0].active_out_channel = \
                     self.input_stem[0].out_channel_list[width_mult[0]]
             if width_mult[1] is not None:
                 self.input_stem[2].active_out_channel = self.input_stem[2].out_channel_list[width_mult[1]]
+                width_mult_idx = 2
+        else:
+            if width_mult[0] is not None:
+                self.input_stem[0].active_out_channel = self.input_stem[0].out_channel_list[width_mult[0]]
 
         if depth[0] is not None:
             self.input_stem_skipping = (depth[0] != max(self.depth_list))
-        for stage_id, (block_idx, d, w) in enumerate(zip(self.grouped_block_index, depth[1:], width_mult[2:])):
+        for stage_id, (block_idx, d, w) in enumerate(zip(self.grouped_block_index, depth[1:], width_mult[width_mult_idx:])):
             if d is not None:
                 self.runtime_depth[stage_id] = max(self.depth_list) - d
             if w is not None:
@@ -214,7 +221,8 @@ class OFAResNets(ResNets):
         # sample expand ratio
         expand_setting = []
         for block in self.blocks:
-            expand_setting.append(random.choice(block.expand_ratio_list))
+            if hasattr(block, 'expand_ratio_list'):
+                expand_setting.append(random.choice(block.expand_ratio_list))
 
         # sample depth
         depth_setting = [random.choice([max(self.depth_list), min(self.depth_list)])]
@@ -238,11 +246,18 @@ class OFAResNets(ResNets):
                 random.choice(list(range(len(stage_first_block.out_channel_list))))
             )
 
-        arch_config = {
-            'd': depth_setting,
-            'e': expand_setting,
-            'w': width_mult_setting
-        }
+        if len(expand_setting):
+            arch_config = {
+                'd': depth_setting,
+                'e': expand_setting,
+                'w': width_mult_setting
+            }
+        else:
+            arch_config = {
+                'd': depth_setting,
+                'w': width_mult_setting
+            }
+
         self.set_active_subnet(**arch_config)
         return arch_config
 
@@ -332,7 +347,7 @@ class OFAResNet34(OFAResNets):
                  dataset='imagenet', small_input_stem=None, downsample_mode=''):
 
         self.block_typ = DynamicResNetBasicBlock
-        self.base_depth_list = [1, 2, 4, 2]
+        self.base_depth_list = [1, 2, 4, 1]
         self.base_width_list = [64, 128, 256, 512]
         self.downsample_mode = 'conv' if not downsample_mode else downsample_mode
 

@@ -8,7 +8,7 @@ import torch.nn as nn
 from collections import OrderedDict
 
 from ofa.utils.layers import MBConvLayer, ConvLayer, IdentityLayer, set_layer_from_config
-from ofa.utils.layers import ResNetBottleneckBlock, LinearLayer
+from ofa.utils.layers import ResNetBottleneckBlock, ResNetBasicBlock, LinearLayer
 from ofa.utils import MyModule, val2list, get_net_device, build_activation, make_divisible, SEModule, MyNetwork
 from .dynamic_op import DynamicSeparableConv2d, DynamicConv2d, DynamicBatchNorm2d, DynamicSE, DynamicGroupNorm
 from .dynamic_op import DynamicLinear
@@ -681,10 +681,9 @@ class DynamicResNetBasicBlock(MyModule):
         self.active_out_channel = max(self.out_channel_list)
 
     def forward(self, x):
-        feature_dim = self.active_middle_channels
+        feature_dim = self.active_out_channel
 
         self.conv1.conv.active_out_channel = feature_dim
-        # self.conv2.conv.active_out_channel = feature_dim
         self.conv3.conv.active_out_channel = self.active_out_channel
         if not isinstance(self.downsample, IdentityLayer):
             self.downsample.conv.active_out_channel = self.active_out_channel
@@ -701,8 +700,8 @@ class DynamicResNetBasicBlock(MyModule):
     @property
     def module_str(self):
         return '(%s, %s)' % (
-            '%dx%d_BottleneckConv_in->%d->%d_S%d' % (
-                self.kernel_size, self.kernel_size, self.active_middle_channels, self.active_out_channel, self.stride
+            '%dx%d_BasicConv_in->%d->%d_S%d' % (
+                self.kernel_size, self.kernel_size, self.active_out_channel, self.active_out_channel, self.stride
             ),
             'Identity' if isinstance(self.downsample, IdentityLayer) else self.downsample_mode,
         )
@@ -710,7 +709,7 @@ class DynamicResNetBasicBlock(MyModule):
     @property
     def config(self):
         return {
-            'name': DynamicResNetBottleneckBlock.__name__,
+            'name': DynamicResNetBasicBlock.__name__,
             'in_channel_list': self.in_channel_list,
             'out_channel_list': self.out_channel_list,
             'kernel_size': self.kernel_size,
@@ -721,7 +720,7 @@ class DynamicResNetBasicBlock(MyModule):
 
     @staticmethod
     def build_from_config(config):
-        return DynamicResNetBottleneckBlock(**config)
+        return DynamicResNetBasicBlock(**config)
 
     ############################################################################################
 
@@ -732,12 +731,6 @@ class DynamicResNetBasicBlock(MyModule):
     @property
     def out_channels(self):
         return max(self.out_channel_list)
-
-    @property
-    def active_middle_channels(self):
-        feature_dim = round(self.active_out_channel * self.active_expand_ratio)
-        feature_dim = make_divisible(feature_dim, MyNetwork.CHANNEL_DIVISIBLE)
-        return feature_dim
 
     ############################################################################################
 
@@ -750,15 +743,11 @@ class DynamicResNetBasicBlock(MyModule):
 
         # copy weight from current layer
         sub_layer.conv1.conv.weight.data.copy_(
-            self.conv1.conv.get_active_filter(self.active_middle_channels, in_channel).data)
+            self.conv1.conv.get_active_filter(self.active_out_channel, in_channel).data)
         copy_bn(sub_layer.conv1.bn, self.conv1.bn.bn)
 
-        # sub_layer.conv2.conv.weight.data.copy_(
-        #     self.conv2.conv.get_active_filter(self.active_middle_channels, self.active_middle_channels).data)
-        # copy_bn(sub_layer.conv2.bn, self.conv2.bn.bn)
-
         sub_layer.conv3.conv.weight.data.copy_(
-            self.conv3.conv.get_active_filter(self.active_out_channel, self.active_middle_channels).data)
+            self.conv3.conv.get_active_filter(self.active_out_channel, self.active_out_channel).data)
         copy_bn(sub_layer.conv3.bn, self.conv3.bn.bn)
 
         if not isinstance(self.downsample, IdentityLayer):
@@ -770,13 +759,11 @@ class DynamicResNetBasicBlock(MyModule):
 
     def get_active_subnet_config(self, in_channel):
         return {
-            'name': ResNetBottleneckBlock.__name__,
+            'name': ResNetBasicBlock.__name__,
             'in_channels': in_channel,
             'out_channels': self.active_out_channel,
             'kernel_size': self.kernel_size,
             'stride': self.stride,
-            'expand_ratio': self.active_expand_ratio,
-            'mid_channels': self.active_middle_channels,
             'act_func': self.act_func,
             'groups': 1,
             'downsample_mode': self.downsample_mode,
