@@ -4,7 +4,7 @@ from ofa.utils.layers import set_layer_from_config, ConvLayer, IdentityLayer, Li
 from ofa.utils.layers import ResNetBottleneckBlock, ResidualBlock, ResNetBasicBlock
 from ofa.utils import make_divisible, MyNetwork, MyGlobalAvgPool2d
 
-__all__ = ['ResNets', 'ResNet50', 'ResNet50D', 'ResNet34']
+__all__ = ['ResNets', 'ResNet50', 'ResNet50D', 'ResNet34', 'ResNet18']
 
 
 class ResNets(MyNetwork):
@@ -225,7 +225,7 @@ class ResNet50D(ResNets):
 class ResNet34(ResNets):
 
     def __init__(self, n_classes=1000, width_mult=1.0, bn_param=(0.1, 1e-5), dropout_rate=0,
-                 expand_ratio=None, depth_param=None, depth_list=None, dataset=None):
+                 depth_param=None, depth_list=None, dataset=None):
 
         input_channel = 64
         stage_width_list = [64, 128, 256, 512]
@@ -271,3 +271,18 @@ class ResNet34(ResNets):
 
         # set bn param
         self.set_bn_param(*bn_param)
+
+
+class ResNet18(ResNet34):
+
+    def __init__(self, n_classes=1000, width_mult=1.0, bn_param=(0.1, 1e-5), dropout_rate=0,
+                 depth_param=None, depth_list=None, dataset=None):
+
+        if depth_list is None:
+            depth_list = [1, 1, 1, 1]
+        if depth_param is None:
+            depth_param = 1
+
+        super(ResNet18, self).__init__(n_classes=n_classes, width_mult=width_mult, bn_param=bn_param,
+                                       dropout_rate=dropout_rate, depth_list=depth_list, depth_param=depth_param,
+                                       dataset=dataset)

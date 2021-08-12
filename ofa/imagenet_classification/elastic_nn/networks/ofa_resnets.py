@@ -6,7 +6,7 @@ from ofa.utils.layers import IdentityLayer, ResidualBlock
 from ofa.imagenet_classification.networks import ResNets
 from ofa.utils import make_divisible, val2list, MyNetwork
 
-__all__ = ['OFAResNets', 'OFAResNet50', 'OFAResNet34']
+__all__ = ['OFAResNets', 'OFAResNet50', 'OFAResNet34', 'OFAResNet18']
 
 
 class OFAResNets(ResNets):
@@ -352,8 +352,25 @@ class OFAResNet34(OFAResNets):
         self.downsample_mode = 'conv' if not downsample_mode else downsample_mode
 
         super(OFAResNet34, self).__init__(n_classes, bn_param=bn_param, dropout_rate=dropout_rate,
-                                          depth_list=depth_list, expand_ratio_list=expand_ratio_list,
+                                          depth_list=depth_list, expand_ratio_list=1.0,
                                           width_mult_list=width_mult_list, dataset=dataset,
                                           small_input_stem=small_input_stem, downsample_mode=self.downsample_mode,
                                           block_typ=self.block_typ, base_depth_list=self.base_depth_list,
                                           base_width_list=self.base_width_list)
+
+
+class OFAResNet18(OFAResNets):
+
+    def __init__(self, n_classes=1000, bn_param=(0.1, 1e-5), dropout_rate=0,
+                 depth_list=1, width_mult_list=1.0, dataset='imagenet', small_input_stem=None, downsample_mode=''):
+
+        self.block_typ = DynamicResNetBasicBlock
+        self.base_depth_list = [1, 1, 1, 1]
+        self.base_width_list = [64, 128, 256, 512]
+        self.downsample_mode = 'conv' if not downsample_mode else downsample_mode
+
+        super(OFAResNet18, self).__init__(n_classes, bn_param=bn_param, dropout_rate=dropout_rate,
+                                          depth_list=depth_list, width_mult_list=width_mult_list, expand_ratio_list=1.0,
+                                          dataset=dataset, small_input_stem=small_input_stem,
+                                          downsample_mode=self.downsample_mode, block_typ=self.block_typ,
+                                          base_depth_list=self.base_depth_list, base_width_list=self.base_width_list)
