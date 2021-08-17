@@ -255,9 +255,12 @@ class ResNet34(ResNets):
         for d, width, s in zip(depth_list, stage_width_list, stride_list):
             for i in range(d):
                 stride = s if i == 0 else 1
+                force_downsample = False
+                if len(blocks) == 0:
+                    force_downsample = True
                 basic_block = ResNetBasicBlock(
                     input_channel, width, kernel_size=3, stride=stride,
-                    act_func='relu', downsample_mode='conv',
+                    act_func='relu', downsample_mode='conv', force_downsample=force_downsample
                 )
                 blocks.append(basic_block)
                 input_channel = width

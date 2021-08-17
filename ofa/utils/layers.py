@@ -653,7 +653,7 @@ class ResNetBasicBlock(MyModule):
 
     def __init__(self, in_channels, out_channels,
                  kernel_size=3, stride=1, expand_ratio=0.25, mid_channels=None, act_func='relu', groups=1,
-                 downsample_mode='avgpool_conv'):
+                 downsample_mode='avgpool_conv', force_downsample=False):
         super(ResNetBasicBlock, self).__init__()
 
         self.in_channels = in_channels
@@ -678,7 +678,7 @@ class ResNetBasicBlock(MyModule):
             ('bn', nn.BatchNorm2d(self.out_channels)),
         ]))
 
-        if stride == 1 and in_channels == out_channels:
+        if stride == 1 and in_channels == out_channels and not force_downsample:
             self.downsample = IdentityLayer(in_channels, out_channels)
         elif self.downsample_mode == 'conv':
             self.downsample = nn.Sequential(OrderedDict([
