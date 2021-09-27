@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import datetime
 from pathlib import Path
@@ -30,11 +31,146 @@ class AnnetteConverter:
         self.se_reduction = 4  # squeeze and expand reduction
         self.divisor = 8
 
-        json_file = json.load(open(template_file_path))
-        self.network_template = json.dumps(json_file, indent=4)
+        self.json_file = json.load(open(template_file_path))
+        # self.network_template = json.dumps(self.json_file, indent=4)
+
+        # first group
+        self.stage2_child1 = {2: '"948"',
+                              3: '"930",',
+                              4: '"930",'}
+        self.stage2_child2 = {2: '',
+                              3: '"475"',
+                              4: '"475"'}
+        self.stage3_child1 = {2: '"939",',
+                              3: '"948"',
+                              4: '"939",'}
+        self.stage3_child2 = {2: '"484"',
+                              3: '',
+                              4: '"484"'}
+        self.stage5_parent = {2: '"466"',
+                              3: '"475"',
+                              4: '"484"'}
+
+        # second group
+        self.stage6_child1 = {2: '"984"',
+                              3: '"966",',
+                              4: '"966",'}
+        self.stage6_child2 = {2: '',
+                              3: '"543"',
+                              4: '"543"'}
+        self.stage7_child1 = {2: '"975",',
+                              3: '"984"',
+                              4: '"975",'}
+        self.stage7_child2 = {2: '"563"',
+                              3: '',
+                              4: '"563"'}
+        self.stage9_parent = {2: '"523"',
+                              3: '"543"',
+                              4: '"563"'}
+
+        # third group
+        self.stage10_child1 = {2: '"1020"',
+                               3: '"1002",',
+                               4: '"1002",'}
+        self.stage10_child2 = {2: '',
+                               3: '"619"',
+                               4: '"619"'}
+        self.stage11_child1 = {2: '"1011",',
+                               3: '"1020"',
+                               4: '"1011",'}
+        self.stage11_child2 = {2: '"638"',
+                               3: '',
+                               4: '"638"'}
+        self.stage13_parent = {2: '"600"',
+                               3: '"619"',
+                               4: '"638"'}
+
+        # fourth group
+        self.stage14_child1 = {2: '"1056"',
+                               3: '"1038",',
+                               4: '"1038",'}
+        self.stage14_child2 = {2: '',
+                               3: '"727"',
+                               4: '"727"'}
+        self.stage15_child1 = {2: '"1047",',
+                               3: '"1056"',
+                               4: '"1047",'}
+        self.stage15_child2 = {2: '"757"',
+                               3: '',
+                               4: '"757"'}
+        self.stage17_parent = {2: '"697"',
+                               3: '"727"',
+                               4: '"757"'}
+
+        # fifth group
+        self.stage18_child1 = {2: '"1092"',
+                               3: '"1074",',
+                               4: '"1074",'}
+        self.stage18_child2 = {2: '',
+                               3: '"846"',
+                               4: '"846"'}
+        self.stage19_child1 = {2: '"1083",',
+                               3: '"1092"',
+                               4: '"1083",'}
+        self.stage19_child2 = {2: '"876"',
+                               3: '',
+                               4: '"876"'}
+        self.stage21_parent = {2: '"816"',
+                               3: '"846"',
+                               4: '"876"'}
+
+        self.stage3_blocks = ['930', '469', '933', '472', '936', '475']
+        self.stage4_blocks = ['939', '478', '942', '481', '945', '484']
+        self.stage7_blocks = ['966', '526', '969', '529', '530', '531', '532', '533', '534', '536', '537', '539', '540', '972', '543']
+        self.stage8_blocks = ['975', '546', '978', '549', '550', '551', '552', '553', '554', '556', '557', '559', '560', '981', '563']
+        self.stage11_blocks = ['1002', '604', '605', '606', '608', '1005', '612', '613', '614', '616', '1008', '619']
+        self.stage12_blocks = ['1011', '623', '624', '625', '627', '1014', '631', '632', '633', '635', '1017', '638']
+        self.stage15_blocks = ['1038', '701', '702', '703', '705', '1041', '709', '710', '711', '713', '714', '715', '716', '717', '718', '720', '721', '723', '724', '1044', '727']
+        self.stage16_blocks = ['1047', '731', '732', '733', '735', '1050', '739', '740', '741', '743', '744', '745', '746', '747', '748', '750', '751', '753', '754', '1053', '757']
+        self.stage19_blocks = ['1074', '820', '821', '822', '824', '1077', '828', '829', '830', '832', '833', '834', '835', '836', '837', '839', '840', '842', '843', '1080', '846']
+        self.stage20_blocks = ['1083', '850', '851', '852', '854', '1086', '858', '859', '860', '862', '863', '864', '865', '866', '867', '869', '870', '872', '873', '1089', '876']
+
 
     def create_annette_format(self, ks, e, d, r=224):
         start = datetime.datetime.now()
+
+        # remove unneeded blocks
+        remove_blocks = []
+        if d[0] == 2:
+            remove_blocks.extend(self.stage3_blocks)
+            remove_blocks.extend(self.stage4_blocks)
+        if d[0] == 3:
+            remove_blocks.extend(self.stage4_blocks)
+
+        if d[1] == 2:
+            remove_blocks.extend(self.stage7_blocks)
+            remove_blocks.extend(self.stage8_blocks)
+        if d[1] == 3:
+            remove_blocks.extend(self.stage8_blocks)
+
+        if d[2] == 2:
+            remove_blocks.extend(self.stage11_blocks)
+            remove_blocks.extend(self.stage12_blocks)
+        if d[2] == 3:
+            remove_blocks.extend(self.stage12_blocks)
+
+        if d[3] == 2:
+            remove_blocks.extend(self.stage15_blocks)
+            remove_blocks.extend(self.stage16_blocks)
+        if d[3] == 3:
+            remove_blocks.extend(self.stage16_blocks)
+
+        if d[4] == 2:
+            remove_blocks.extend(self.stage19_blocks)
+            remove_blocks.extend(self.stage20_blocks)
+        if d[4] == 3:
+            remove_blocks.extend(self.stage20_blocks)
+
+        for block in remove_blocks:
+            del self.json_file['layers'][block]
+
+        network_template = json.dumps(self.json_file, indent=4)
+
         # define fields for replacement
         replace_pattern = {
             '"img_size"': '%d' % r,
@@ -95,12 +231,40 @@ class AnnetteConverter:
             '"e_17_s"': '%d' % (make_divisible(e[17] * self.base_stage_width[17] // self.se_reduction, self.divisor)),
             '"e_18_s"': '%d' % (make_divisible(e[18] * self.base_stage_width[18] // self.se_reduction, self.divisor)),
             '"e_19_s"': '%d' % (make_divisible(e[19] * self.base_stage_width[19] // self.se_reduction, self.divisor)),
+            '"stage2_child1",': '%s' % (self.stage2_child1[d[0]]),
+            '"stage2_child2"': '%s' % (self.stage2_child2[d[0]]),
+            '"stage3_child1",': '%s' % (self.stage3_child1[d[0]]),
+            '"stage3_child2"': '%s' % (self.stage3_child2[d[0]]),
+            '"stage5_parent"': '%s' % (self.stage5_parent[d[0]]),
 
+            '"stage6_child1",': '%s' % (self.stage6_child1[d[1]]),
+            '"stage6_child2"': '%s' % (self.stage6_child2[d[1]]),
+            '"stage7_child1",': '%s' % (self.stage7_child1[d[1]]),
+            '"stage7_child2"': '%s' % (self.stage7_child2[d[1]]),
+            '"stage9_parent"': '%s' % (self.stage9_parent[d[1]]),
+
+            '"stage10_child1",': '%s' % (self.stage10_child1[d[2]]),
+            '"stage10_child2"': '%s' % (self.stage10_child2[d[2]]),
+            '"stage11_child1",': '%s' % (self.stage11_child1[d[2]]),
+            '"stage11_child2"': '%s' % (self.stage11_child2[d[2]]),
+            '"stage13_parent"': '%s' % (self.stage13_parent[d[2]]),
+
+            '"stage14_child1",': '%s' % (self.stage14_child1[d[3]]),
+            '"stage14_child2"': '%s' % (self.stage14_child2[d[3]]),
+            '"stage15_child1",': '%s' % (self.stage15_child1[d[3]]),
+            '"stage15_child2"': '%s' % (self.stage15_child2[d[3]]),
+            '"stage17_parent"': '%s' % (self.stage17_parent[d[3]]),
+
+            '"stage18_child1",': '%s' % (self.stage18_child1[d[4]]),
+            '"stage18_child2"': '%s' % (self.stage18_child2[d[4]]),
+            '"stage19_child1",': '%s' % (self.stage19_child1[d[4]]),
+            '"stage19_child2"': '%s' % (self.stage19_child2[d[4]]),
+            '"stage21_parent"': '%s' % (self.stage21_parent[d[4]]),
         }
         replace_patterns = dict((re.escape(k), v) for k, v in replace_pattern.items())
         pattern = re.compile(("|".join(replace_patterns.keys())))
         # replace fields with actual values
-        annette_json = pattern.sub(lambda m: replace_patterns[re.escape(m.group(0))], self.network_template)
+        annette_json = pattern.sub(lambda m: replace_patterns[re.escape(m.group(0))], network_template)
         end = datetime.datetime.now()
         print('Converted to ANNETTE in %.0f ms' % ((end - start).total_seconds() * 1000))
         return annette_json
@@ -129,7 +293,7 @@ def compare_files(file_name_1, file_name_2):
 def ofa_2_onnx_2_annette(sub_net_arch=None):
     # create annette form onnx for testing
     image_size_list = [128, 160, 192, 224]
-    ofa_net = OFAMobileNetV3(ks_list=[3, 5, 7], depth_list=[4], expand_ratio_list=[3, 4, 6])
+    ofa_net = OFAMobileNetV3(ks_list=[3, 5, 7], depth_list=[2, 3, 4], expand_ratio_list=[3, 4, 6])
     if sub_net_arch is None:
         sub_net_arch = ofa_net.sample_active_subnet()
         sub_net_arch['r'] = random.choice(image_size_list)
@@ -166,13 +330,40 @@ def ofa_2_onnx_2_annette(sub_net_arch=None):
     annette_graph_json = json.dumps(json.load(open(file_name_annette)), indent=4)
     return file_name_annette, sub_net_arch
 
+
+def rename_nodes(path_json_net):
+    replace_pattern = {}
+
+    json_file = json.load(open(path_json_net))
+    for new_name, element in enumerate(json_file['layers']):
+        if element != 'input.1':
+            replace_pattern['"' + element + '"'] = str(new_name)
+
+    replace_patterns = dict((re.escape(k), v) for k, v in replace_pattern.items())
+    pattern = re.compile(("|".join(replace_patterns.keys())))
+    # replace fields with actual values
+    json_str = json.dumps(json_file, indent=4)
+    renamed_nodes = pattern.sub(lambda m: replace_patterns[re.escape(m.group(0))], json_str)
+
+    # save file
+    new_file_name = os.path.splitext(path_json_net)[0] + '_reordered.json'
+    new_json_file = open(new_file_name, 'w')
+    new_json_file.write(renamed_nodes)
+    new_json_file.close()
+    return new_file_name
+
+
+
 #########################
 
 sub_net_architectures = [
+    # {'ks': [3, 3, 7, 7, 3, 7, 3, 3, 3, 7, 3, 7, 7, 3, 3, 5, 3, 5, 3, 7], 'e': [3, 4, 6, 4, 4, 3, 4, 4, 6, 4, 3, 4, 3, 3, 4, 6, 4, 6, 6, 4], 'd': [2, 2, 2, 2, 3], 'r': 224}
+    # {'ks': [5, 7, 5, 3, 7, 5, 3, 3, 5, 7, 5, 7, 7, 7, 3, 7, 7, 7, 7, 5], 'e': [3, 3, 4, 6, 3, 4, 4, 6, 3, 6, 6, 4, 4, 3, 6, 6, 6, 6, 4, 3], 'd': [4, 4, 4, 4, 4], 'r': 192}
+    # {'ks': [3, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7], 'e': [4, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6], 'd': [3, 4, 4, 4, 4], 'r': 224},
     # {'ks': [7, 3, 3, 7, 5, 5, 7, 5, 3, 3, 3, 5, 5, 3, 7, 7, 7, 3, 7, 3], 'e': [3, 6, 4, 3, 3, 3, 4, 3, 6, 3, 4, 3, 4, 6, 3, 4, 4, 4, 6, 3], 'd': [4, 4, 4, 4, 4], 'r': 128},
     # {'ks': [5, 7, 3, 3, 5, 5, 3, 3, 3, 5, 3, 3, 3, 7, 5, 7, 3, 3, 7, 5], 'e': [4, 3, 6, 6, 6, 3, 6, 4, 4, 6, 6, 6, 4, 6, 6, 6, 4, 6, 6, 3], 'd': [4, 4, 4, 4, 4], 'r': 160},
     # {'ks': [5, 5, 7, 5, 7, 5, 3, 7, 3, 3, 7, 7, 3, 3, 3, 5, 5, 7, 3, 7], 'e': [6, 3, 3, 6, 3, 3, 6, 6, 6, 3, 6, 4, 4, 4, 4, 4, 6, 3, 4, 6], 'd': [4, 4, 4, 4, 4], 'r': 160},
-    {'ks': [3, 5, 7, 3, 3, 3, 3, 3, 5, 5, 5, 5, 3, 3, 5, 3, 7, 5, 7, 5], 'e': [3, 4, 6, 4, 6, 6, 4, 4, 4, 3, 3, 4, 6, 4, 6, 6, 4, 4, 4, 6], 'd': [4, 4, 4, 4, 4], 'r': 192},
+    # {'ks': [3, 5, 7, 3, 3, 3, 3, 3, 5, 5, 5, 5, 3, 3, 5, 3, 7, 5, 7, 5], 'e': [3, 4, 6, 4, 6, 6, 4, 4, 4, 3, 3, 4, 6, 4, 6, 6, 4, 4, 4, 6], 'd': [4, 4, 4, 4, 4], 'r': 192},
 ]
 
 logfile_name = 'test_results_converter.txt'
@@ -182,9 +373,10 @@ error_file = open(error_file_name, 'w')
 
 # for sub_net_arch in sub_net_architectures:
 for i in range(10):
-    logfile.write('***Test***\n')
     file_name_annette, sub_net_arch = ofa_2_onnx_2_annette()
     # file_name_annette, _ = ofa_2_onnx_2_annette(sub_net_arch)
+
+    logfile.write('***Test***\n')
     logfile.write(str(sub_net_arch))
 
     # set up converter
@@ -200,7 +392,12 @@ for i in range(10):
     new_json_file.write(annette_json)
     new_json_file.close()
 
-    match = compare_files(file_name_annette, file_name_converted_annette)
+    file1 = rename_nodes(file_name_annette)
+    file2 = rename_nodes(file_name_converted_annette)
+
+
+    # match = compare_files(file_name_annette, file_name_converted_annette)
+    match = compare_files(file1, file2)
 
     if match:
         logfile.write('\nConversion is correct :)\n')

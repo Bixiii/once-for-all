@@ -643,8 +643,8 @@
                 "918"
             ],
             "children": [
-                "930",
-                "475"
+                "stage2_child1",
+                "stage2_child2"
             ],
             "input_shape": [
                 -1,
@@ -843,8 +843,8 @@
                 "466"
             ],
             "children": [
-                "939",
-                "484"
+                "stage3_child1",
+                "stage3_child2"
             ],
             "input_shape": [
                 -1,
@@ -1062,7 +1062,7 @@
         "948": {
             "type": "Conv",
             "parents": [
-                "484"
+                "stage5_parent"
             ],
             "children": [
                 "487"
@@ -1907,8 +1907,8 @@
                 "954"
             ],
             "children": [
-                "966",
-                "543"
+                "stage6_child1",
+                "stage6_child2"
             ],
             "input_shape": [
                 -1,
@@ -2351,8 +2351,8 @@
                 "523"
             ],
             "children": [
-                "975",
-                "563"
+                "stage7_child1",
+                "stage7_child2"
             ],
             "input_shape": [
                 -1,
@@ -2814,7 +2814,7 @@
         "984": {
             "type": "Conv",
             "parents": [
-                "563"
+                "stage9_parent"
             ],
             "children": [
                 "567",
@@ -3443,8 +3443,8 @@
                 "990"
             ],
             "children": [
-                "1002",
-                "619"
+                "stage10_child1",
+                "stage10_child2"
             ],
             "input_shape": [
                 -1,
@@ -3779,8 +3779,8 @@
                 "600"
             ],
             "children": [
-                "1011",
-                "638"
+                "stage11_child1",
+                "stage11_child2"
             ],
             "input_shape": [
                 -1,
@@ -4134,7 +4134,7 @@
         "1020": {
             "type": "Conv",
             "parents": [
-                "638"
+                "stage13_parent"
             ],
             "children": [
                 "642",
@@ -5251,8 +5251,8 @@
                 "1026"
             ],
             "children": [
-                "1038",
-                "727"
+                "stage14_child1",
+                "stage14_child2"
             ],
             "input_shape": [
                 -1,
@@ -5831,8 +5831,8 @@
                 "697"
             ],
             "children": [
-                "1047",
-                "757"
+                "stage15_child1",
+                "stage15_child2"
             ],
             "input_shape": [
                 -1,
@@ -6430,7 +6430,7 @@
         "1056": {
             "type": "Conv",
             "parents": [
-                "757"
+                "stage17_parent"
             ],
             "children": [
                 "761",
@@ -7547,8 +7547,8 @@
                 "1062"
             ],
             "children": [
-                "1074",
-                "846"
+                "stage18_child1",
+                "stage18_child2"
             ],
             "input_shape": [
                 -1,
@@ -8127,8 +8127,8 @@
                 "816"
             ],
             "children": [
-                "1083",
-                "876"
+                "stage19_child1",
+                "stage19_child2"
             ],
             "input_shape": [
                 -1,
@@ -8726,7 +8726,7 @@
         "1092": {
             "type": "Conv",
             "parents": [
-                "876"
+                "stage21_parent"
             ],
             "children": [
                 "880",
