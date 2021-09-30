@@ -4,6 +4,7 @@ import re
 import datetime
 from pathlib import Path
 import random
+import copy
 
 import onnx
 import difflib
@@ -31,8 +32,9 @@ class AnnetteConverter:
         self.se_reduction = 4  # squeeze and expand reduction
         self.divisor = 8
 
-        self.json_file = json.load(open(template_file_path))
-        # self.network_template = json.dumps(self.json_file, indent=4)
+        fd = open(template_file_path)
+        self.mbv3_template = json.load(fd)
+        fd.close()
 
         # first group
         self.stage2_child1 = {2: '"948"',
@@ -121,20 +123,38 @@ class AnnetteConverter:
 
         self.stage3_blocks = ['930', '469', '933', '472', '936', '475']
         self.stage4_blocks = ['939', '478', '942', '481', '945', '484']
-        self.stage7_blocks = ['966', '526', '969', '529', '530', '531', '532', '533', '534', '536', '537', '539', '540', '972', '543']
-        self.stage8_blocks = ['975', '546', '978', '549', '550', '551', '552', '553', '554', '556', '557', '559', '560', '981', '563']
+        self.stage7_blocks = ['966', '526', '969', '529', '530', '531', '532', '533', '534', '536', '537', '539', '540',
+                              '972', '543']
+        self.stage8_blocks = ['975', '546', '978', '549', '550', '551', '552', '553', '554', '556', '557', '559', '560',
+                              '981', '563']
         self.stage11_blocks = ['1002', '604', '605', '606', '608', '1005', '612', '613', '614', '616', '1008', '619']
         self.stage12_blocks = ['1011', '623', '624', '625', '627', '1014', '631', '632', '633', '635', '1017', '638']
-        self.stage15_blocks = ['1038', '701', '702', '703', '705', '1041', '709', '710', '711', '713', '714', '715', '716', '717', '718', '720', '721', '723', '724', '1044', '727']
-        self.stage16_blocks = ['1047', '731', '732', '733', '735', '1050', '739', '740', '741', '743', '744', '745', '746', '747', '748', '750', '751', '753', '754', '1053', '757']
-        self.stage19_blocks = ['1074', '820', '821', '822', '824', '1077', '828', '829', '830', '832', '833', '834', '835', '836', '837', '839', '840', '842', '843', '1080', '846']
-        self.stage20_blocks = ['1083', '850', '851', '852', '854', '1086', '858', '859', '860', '862', '863', '864', '865', '866', '867', '869', '870', '872', '873', '1089', '876']
-
+        self.stage15_blocks = ['1038', '701', '702', '703', '705', '1041', '709', '710', '711', '713', '714', '715',
+                               '716', '717', '718', '720', '721', '723', '724', '1044', '727']
+        self.stage16_blocks = ['1047', '731', '732', '733', '735', '1050', '739', '740', '741', '743', '744', '745',
+                               '746', '747', '748', '750', '751', '753', '754', '1053', '757']
+        self.stage19_blocks = ['1074', '820', '821', '822', '824', '1077', '828', '829', '830', '832', '833', '834',
+                               '835', '836', '837', '839', '840', '842', '843', '1080', '846']
+        self.stage20_blocks = ['1083', '850', '851', '852', '854', '1086', '858', '859', '860', '862', '863', '864',
+                               '865', '866', '867', '869', '870', '872', '873', '1089', '876']
 
     def create_annette_format(self, ks, e, d, r=224):
+        """
+
+        Args:
+            ks (): list kernel sizes of architecture configuration
+            e (): list expand values of architecture configuration
+            d (): list of depth parameters of architecture configuration
+            r (): resolution
+
+        Returns: json string representing net in ANNETTE format
+
+        """
         start = datetime.datetime.now()
 
-        # remove unneeded blocks
+        mbv3_annette = copy.deepcopy(self.mbv3_template)
+
+        # remove unneeded blocks (skip layers)
         remove_blocks = []
         if d[0] == 2:
             remove_blocks.extend(self.stage3_blocks)
@@ -167,9 +187,9 @@ class AnnetteConverter:
             remove_blocks.extend(self.stage20_blocks)
 
         for block in remove_blocks:
-            del self.json_file['layers'][block]
+            del mbv3_annette['layers'][block]
 
-        network_template = json.dumps(self.json_file, indent=4)
+        mbv3_annette = json.dumps(mbv3_annette, indent=4)
 
         # define fields for replacement
         replace_pattern = {
@@ -263,148 +283,13 @@ class AnnetteConverter:
         }
         replace_patterns = dict((re.escape(k), v) for k, v in replace_pattern.items())
         pattern = re.compile(("|".join(replace_patterns.keys())))
+
         # replace fields with actual values
-        annette_json = pattern.sub(lambda m: replace_patterns[re.escape(m.group(0))], network_template)
+        mbv3_annette = pattern.sub(lambda m: replace_patterns[re.escape(m.group(0))], mbv3_annette)
+
         end = datetime.datetime.now()
         print('Converted to ANNETTE in %.0f ms' % ((end - start).total_seconds() * 1000))
-        return annette_json
+
+        return mbv3_annette
 
 
-#####################################
-#  Test conversion (random testing)
-#####################################
-
-def compare_files(file_name_1, file_name_2):
-    lines1 = (line.rstrip('\n') for line in open(file_name_1))
-    lines2 = (line.rstrip('\n') for line in open(file_name_2))
-
-    num_diff_lines = 0
-    for line1, line2 in zip(lines1, lines2):
-        if line1 != line2:
-            num_diff_lines += 1
-
-    # assert (num_diff_lines == 1)
-    if num_diff_lines == 1:
-        return True
-    else:
-        return False
-
-
-def ofa_2_onnx_2_annette(sub_net_arch=None):
-    # create annette form onnx for testing
-    image_size_list = [128, 160, 192, 224]
-    ofa_net = OFAMobileNetV3(ks_list=[3, 5, 7], depth_list=[2, 3, 4], expand_ratio_list=[3, 4, 6])
-    if sub_net_arch is None:
-        sub_net_arch = ofa_net.sample_active_subnet()
-        sub_net_arch['r'] = random.choice(image_size_list)
-    ofa_net.set_active_subnet(ks=sub_net_arch['ks'], e=sub_net_arch['e'], d=sub_net_arch['d'])
-    sub_net = ofa_net.get_active_subnet()
-
-    config_str = ''
-    if sub_net_arch is not None:
-        config_str = 'ks'
-        for ks in sub_net_arch['ks']:
-            config_str += str(ks)
-        config_str += '-e'
-        for e in sub_net_arch['e']:
-            config_str += str(e)
-        config_str += '-d'
-        for d in sub_net_arch['d']:
-            config_str += str(d)
-        config_str += '-r' + str(sub_net_arch['r'])
-
-    file_name = r'C:/Users/bixi/PycharmProjects/OnceForAllFork/exp/mobile_net/onnx/%s-mbv3.onnx' % config_str
-    file_name_simplified = r'C:/Users/bixi/PycharmProjects/OnceForAllFork/exp/mobile_net/simplified/simplified_%s-mbv3.onnx' % config_str
-    file_name_annette = r'C:/Users/bixi/PycharmProjects/OnceForAllFork/exp/mobile_net/annette/%s-mbv3.json' % config_str
-
-    export_as_onnx(sub_net, file_name, sub_net_arch['r'])
-    onnx_model = onnx.load(file_name)
-    simplified, check = simplify(onnx_model)
-    onnx.save(simplified, file_name_simplified)
-    onnx_model_simplified = onnx.load(file_name_simplified)
-
-    onnx_network = ONNXGraph(file_name_simplified)
-    annette_graph = onnx_network.onnx_to_annette(file_name_simplified, ['input.1'], verbose=False)
-    annette_graph.to_json(Path(file_name_annette))
-
-    annette_graph_json = json.dumps(json.load(open(file_name_annette)), indent=4)
-    return file_name_annette, sub_net_arch
-
-
-def rename_nodes(path_json_net):
-    replace_pattern = {}
-
-    json_file = json.load(open(path_json_net))
-    for new_name, element in enumerate(json_file['layers']):
-        if element != 'input.1':
-            replace_pattern['"' + element + '"'] = str(new_name)
-
-    replace_patterns = dict((re.escape(k), v) for k, v in replace_pattern.items())
-    pattern = re.compile(("|".join(replace_patterns.keys())))
-    # replace fields with actual values
-    json_str = json.dumps(json_file, indent=4)
-    renamed_nodes = pattern.sub(lambda m: replace_patterns[re.escape(m.group(0))], json_str)
-
-    # save file
-    new_file_name = os.path.splitext(path_json_net)[0] + '_reordered.json'
-    new_json_file = open(new_file_name, 'w')
-    new_json_file.write(renamed_nodes)
-    new_json_file.close()
-    return new_file_name
-
-
-
-#########################
-
-sub_net_architectures = [
-    # {'ks': [3, 3, 7, 7, 3, 7, 3, 3, 3, 7, 3, 7, 7, 3, 3, 5, 3, 5, 3, 7], 'e': [3, 4, 6, 4, 4, 3, 4, 4, 6, 4, 3, 4, 3, 3, 4, 6, 4, 6, 6, 4], 'd': [2, 2, 2, 2, 3], 'r': 224}
-    # {'ks': [5, 7, 5, 3, 7, 5, 3, 3, 5, 7, 5, 7, 7, 7, 3, 7, 7, 7, 7, 5], 'e': [3, 3, 4, 6, 3, 4, 4, 6, 3, 6, 6, 4, 4, 3, 6, 6, 6, 6, 4, 3], 'd': [4, 4, 4, 4, 4], 'r': 192}
-    # {'ks': [3, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7], 'e': [4, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6], 'd': [3, 4, 4, 4, 4], 'r': 224},
-    # {'ks': [7, 3, 3, 7, 5, 5, 7, 5, 3, 3, 3, 5, 5, 3, 7, 7, 7, 3, 7, 3], 'e': [3, 6, 4, 3, 3, 3, 4, 3, 6, 3, 4, 3, 4, 6, 3, 4, 4, 4, 6, 3], 'd': [4, 4, 4, 4, 4], 'r': 128},
-    # {'ks': [5, 7, 3, 3, 5, 5, 3, 3, 3, 5, 3, 3, 3, 7, 5, 7, 3, 3, 7, 5], 'e': [4, 3, 6, 6, 6, 3, 6, 4, 4, 6, 6, 6, 4, 6, 6, 6, 4, 6, 6, 3], 'd': [4, 4, 4, 4, 4], 'r': 160},
-    # {'ks': [5, 5, 7, 5, 7, 5, 3, 7, 3, 3, 7, 7, 3, 3, 3, 5, 5, 7, 3, 7], 'e': [6, 3, 3, 6, 3, 3, 6, 6, 6, 3, 6, 4, 4, 4, 4, 4, 6, 3, 4, 6], 'd': [4, 4, 4, 4, 4], 'r': 160},
-    # {'ks': [3, 5, 7, 3, 3, 3, 3, 3, 5, 5, 5, 5, 3, 3, 5, 3, 7, 5, 7, 5], 'e': [3, 4, 6, 4, 6, 6, 4, 4, 4, 3, 3, 4, 6, 4, 6, 6, 4, 4, 4, 6], 'd': [4, 4, 4, 4, 4], 'r': 192},
-]
-
-logfile_name = 'test_results_converter.txt'
-logfile = open(logfile_name, 'w')
-error_file_name = 'errors_converter.txt'
-error_file = open(error_file_name, 'w')
-
-# for sub_net_arch in sub_net_architectures:
-for i in range(10):
-    file_name_annette, sub_net_arch = ofa_2_onnx_2_annette()
-    # file_name_annette, _ = ofa_2_onnx_2_annette(sub_net_arch)
-
-    logfile.write('***Test***\n')
-    logfile.write(str(sub_net_arch))
-
-    # set up converter
-    json_network_template_path = r'C:\Users\bixi\PycharmProjects\OnceForAllFork\exp\mobile_net\annette\generalized_mbv3.json'
-    converter = AnnetteConverter(json_network_template_path)
-
-    # do conversion
-    annette_json = converter.create_annette_format(**sub_net_arch)
-
-    # save file
-    file_name_converted_annette = 'mbv3.json'
-    new_json_file = open(file_name_converted_annette, 'w')
-    new_json_file.write(annette_json)
-    new_json_file.close()
-
-    file1 = rename_nodes(file_name_annette)
-    file2 = rename_nodes(file_name_converted_annette)
-
-
-    # match = compare_files(file_name_annette, file_name_converted_annette)
-    match = compare_files(file1, file2)
-
-    if match:
-        logfile.write('\nConversion is correct :)\n')
-        print('\nConversion is correct :)\n')
-    else:
-        logfile.write('\n>>>>>> !!! ERROR !!! >>>>>>\n')
-        error_file.write(str(sub_net_arch))
-        print('\n>>>>>> !!! ERROR !!! >>>>>>\n')
-
-print('~~~* fin *~~~')
