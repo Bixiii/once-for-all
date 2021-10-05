@@ -21,3 +21,23 @@ def count_flops(net, input_shape=(3, 32, 32)):
 
 def project_root():
     return os.path.dirname(os.path.abspath(__file__))
+
+
+def architecture_config_2_str(architecture_config):
+    config_str = ''
+    config_str = 'ks'
+    for ks in architecture_config['ks']:
+        config_str += str(ks)
+    config_str += '-e'
+    for e in architecture_config['e']:
+        config_str += str(e)
+    config_str += '-d'
+    for d in architecture_config['d']:
+        config_str += str(d)
+    if 'r' in architecture_config:
+        config_str += '-r' + str(architecture_config['r'])
+    if 'image_size' in architecture_config:
+        config_str += '-r' + str(architecture_config['image_size'])
+    return config_str
+
+
