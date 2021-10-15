@@ -22,7 +22,7 @@ dp_map = construct_maps(keys=(2, 3, 4))
 
 
 class AccuracyPredictor:
-    def __init__(self, pretrained=True, device='cuda:0'):
+    def __init__(self, pretrained=True, device='cuda:0', acc_predictor_path=None):
         self.device = device
 
         self.model = nn.Sequential(
@@ -34,12 +34,17 @@ class AccuracyPredictor:
             nn.ReLU(),
             nn.Linear(400, 1),
         )
-        if pretrained:
+        if pretrained and acc_predictor_path is None:
             # load pretrained model
             fname = download_url("https://hanlab.mit.edu/files/OnceForAll/tutorial/acc_predictor.pth")
             self.model.load_state_dict(
                 torch.load(fname, map_location=torch.device('cpu'))
             )
+        elif pretrained:
+            self.model.load_state_dict(
+                torch.load(acc_predictor_path, map_location=torch.device('cpu'))
+            )
+
         self.model = self.model.to(self.device)
 
     # TODO: merge it with serialization utils.
