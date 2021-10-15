@@ -1,21 +1,9 @@
 import json
-import os
 import re
 import datetime
-from pathlib import Path
-import random
 import copy
 
-import onnx
-import difflib
-
-from onnxsim import simplify
-
-from annette.graph import ONNXGraph
-
-from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3
 from ofa.utils import make_divisible
-from utils import export_as_onnx
 
 
 class AnnetteConverter:
@@ -151,6 +139,9 @@ class AnnetteConverter:
 
         """
         start = datetime.datetime.now()
+
+        if isinstance(r, list):
+            r = r[0]
 
         mbv3_annette = copy.deepcopy(self.mbv3_template)
 

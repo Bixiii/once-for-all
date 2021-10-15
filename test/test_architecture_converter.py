@@ -11,7 +11,7 @@ from onnxsim import simplify
 from annette.graph import ONNXGraph
 
 from generate_annette_format import AnnetteConverter
-from utils import export_as_onnx
+from utils import export_as_onnx, architecture_config_2_str
 from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3
 
 
@@ -76,22 +76,6 @@ def ofa_2_onnx_2_annette(sub_net_arch=None, keep_files=False):
     return file_name_annette, sub_net_arch
 
 
-def architecture_config_2_str(architecture_config):
-    config_str = ''
-    config_str = 'ks'
-    for ks in architecture_config['ks']:
-        config_str += str(ks)
-    config_str += '-e'
-    for e in architecture_config['e']:
-        config_str += str(e)
-    config_str += '-d'
-    for d in architecture_config['d']:
-        config_str += str(d)
-    if 'r' in architecture_config:
-        config_str += '-r' + str(architecture_config['r'])
-    return config_str
-
-
 def rename_nodes(path_json_net):
     """
     Rename elements in ANNETTE json format
@@ -112,7 +96,7 @@ def rename_nodes(path_json_net):
     for new_name, element in enumerate(json_file['layers']):
         if element in input_layers:
             continue
-        replace_pattern['"' + element + '"'] = str(new_name)
+        replace_pattern['"' + element + '"'] = '"' + str(new_name) + '"'
 
     replace_patterns = dict((re.escape(k), v) for k, v in replace_pattern.items())
     pattern = re.compile(("|".join(replace_patterns.keys())))
@@ -202,7 +186,7 @@ class TestConverter(unittest.TestCase):
 
         print('hi')
 
-    def test_full_conversion(self, keep_files = False):
+    def test_full_conversion(self, keep_files=True):
 
         error_file_name = './out_data/errors_converter.txt'
         error_file = open(error_file_name, 'w')
