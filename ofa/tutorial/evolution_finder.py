@@ -27,12 +27,15 @@ class ArchManager:
             e.append(random.choice(self.expand_ratios))
             ks.append(random.choice(self.kernel_sizes))
 
+        img_size = [random.choice(self.resolutions)]
+
         sample = {
             'wid': None,
             'ks': ks,
             'e': e,
             'd': d,
-            'r': [random.choice(self.resolutions)]
+            'r': img_size,
+            'image_size': img_size
         }
 
         return sample
