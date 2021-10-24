@@ -4,7 +4,16 @@
 
 import os
 import copy
+
+from utils import architecture_config_2_str, project_root
+
 from .latency_lookup_table import *
+
+from generate_annette_format import AnnetteConverter
+from annette import get_database
+from annette.estimation.layer_model import Layer_model
+from annette.estimation.mapping_model import Mapping_model
+from annette.graph import AnnetteGraph
 
 
 class BaseEfficiencyModel:
@@ -36,12 +45,16 @@ class Mbv3FLOPsModel(BaseEfficiencyModel):
         active_net_config, image_size = self.get_active_subnet_config(arch_dict)
         return MBv3LatencyTable.count_flops_given_config(active_net_config, image_size)
 
+    def predict_efficiency(self, arch_dict):
+        return self.get_efficiency(arch_dict)
+
 
 class ResNet50FLOPsModel(BaseEfficiencyModel):
 
     def get_efficiency(self, arch_dict):
         active_net_config, image_size = self.get_active_subnet_config(arch_dict)
         return ResNet50LatencyTable.count_flops_given_config(active_net_config, image_size)
+
 
 class ProxylessNASLatencyModel(BaseEfficiencyModel):
 
@@ -69,3 +82,53 @@ class Mbv3LatencyModel(BaseEfficiencyModel):
     def get_efficiency(self, arch_dict):
         active_net_config, image_size = self.get_active_subnet_config(arch_dict)
         return self.latency_tables[image_size].predict_network_latency_given_config(active_net_config, image_size)
+
+
+class AnnetteLatencyModel(BaseEfficiencyModel):
+
+    def __init__(self, ofa_net, model='dnndk-mixed'):
+        super().__init__(ofa_net)
+        os.makedirs('./exp/tmp/', exist_ok=True)
+        mappings = ['dnndk', 'ov']  # dnndk <- Xlinx ZCU 10, 2ov <- open vino
+        layers = ['dnndk-mixed',
+                  'dnndk-ref_roofline',
+                  'dnndk-roofline',
+                  'dnndk-statistical',  # statistical <- random forest
+                  'ncs2-mixed',  # ncs2 <- intel neural compute stick
+                  'ncs2-ref_roofline',
+                  'ncs2-roofline',
+                  'ncs2-statistical',
+                  ]
+
+        assert(model in layers)
+        layer = model
+        mapping = mappings[0]
+
+        # load models
+        self.opt = Mapping_model.from_json(get_database('models', 'mapping', mapping + '.json'))
+        self.mod = Layer_model.from_json(get_database('models', 'layer', layer + '.json'))
+
+        # set up ofa-2-annette converter
+        network_template = project_root() + '/resources/generalized_mbv3.json'
+        self.annette_converter = AnnetteConverter(network_template)
+
+    def predict_efficiency(self, arch_dict):
+        annette_network = self.annette_converter.create_annette_format(ks=arch_dict['ks'], e=arch_dict['e'],
+                                                                       d=arch_dict['d'], r=arch_dict['image_size'])
+        # save file
+        annette_network_path = './exp/tmp/mbv3-annette_%s.json' % (architecture_config_2_str(arch_dict))
+        new_json_file = open(annette_network_path, 'w')
+        new_json_file.write(annette_network)
+        new_json_file.close()
+
+        # load from annette json file
+        model = AnnetteGraph('ofa-net', annette_network_path)
+
+        # estimate
+        self.opt.run_optimization(model)
+        res = self.mod.estimate_model(model)
+
+        return res[0]
+
+    def get_efficiency(self, arch_dict):
+        return self.predict_efficiency(arch_dict)

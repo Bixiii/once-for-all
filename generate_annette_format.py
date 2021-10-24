@@ -279,7 +279,7 @@ class AnnetteConverter:
         mbv3_annette = pattern.sub(lambda m: replace_patterns[re.escape(m.group(0))], mbv3_annette)
 
         end = datetime.datetime.now()
-        print('Converted to ANNETTE in %.0f ms' % ((end - start).total_seconds() * 1000))
+        # print('Converted to ANNETTE in %.0f ms' % ((end - start).total_seconds() * 1000))
 
         return mbv3_annette
 

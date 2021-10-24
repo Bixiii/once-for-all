@@ -123,3 +123,5 @@ tutorial/.torch
 tutorial/local_lut.npy
 .torch
 pretrained
+.tmp
+results

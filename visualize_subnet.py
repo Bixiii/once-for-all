@@ -7,7 +7,7 @@ class Visualisation:
         self.mbv3_base_stage_width = [16, 24, 24, 24, 24, 40, 40, 40, 40, 80, 80, 80, 80, 112, 112, 112, 112, 160, 160,
                                       160, 160]
 
-    def mbv3_barchart(self, subnet_config, save_path=None, title=None):
+    def mbv3_barchart(self, subnet_config, save_path=None, title=None, show=False):
         layers = []
         for i in range(1, 21):
 
@@ -46,7 +46,10 @@ class Visualisation:
 
         if save_path is not None:
             plt.savefig(save_path)
-        plt.show()
+        if show:
+            plt.show()
+
+        return fig
 
 
 if __name__ == '__main__':

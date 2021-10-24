@@ -57,6 +57,7 @@ class EvolutionFinder:
     valid_constraint_range = {
         'flops': [150, 600],
         'note10': [15, 60],
+        'annette': [1, 10]
     }
 
     def __init__(self, constraint_type, efficiency_constraint,
