@@ -12,6 +12,7 @@ from ofa.nas.efficiency_predictor import AnnetteLatencyModel
 from ofa.tutorial import AccuracyPredictor, LatencyTable, EvolutionFinder, FLOPsTable
 from utils import architecture_config_2_str
 from visualize_subnet import Visualisation
+from utils import logger
 
 """
 NAS for MobileNetV3 and Imagenet using pretrained networks from OnceForAll publication
@@ -41,6 +42,11 @@ constraint_type = args.constrain_type
 annette_model = args.annette_model
 parent_folder = 'results/'
 
+# TODO remove temporary parameters
+latency_constraint = 10
+constraint_type = 'annette'
+annette_model = 'dnndk-mixed'
+
 # set random seed
 random_seed = 1
 random.seed(random_seed)
@@ -58,7 +64,8 @@ if cuda_available:
 results_file_name = parent_folder + 'mbv3_optimized_subnets.csv'
 write_header = False if os.path.exists(results_file_name) else True
 output_file = open(results_file_name, 'a+', newline='')
-csv_data_fields = ['constrain_type', 'target_hardware', 'latency_constraint', 'estimated_latency', 'calculation_time', 'top1_acc',
+csv_data_fields = ['constrain_type', 'target_hardware', 'latency_constraint', 'estimated_latency', 'calculation_time',
+                   'top1_acc',
                    'net_config']
 csv_writer = csv.DictWriter(output_file, fieldnames=csv_data_fields)
 if write_header:
@@ -97,8 +104,8 @@ else:
     raise NotImplementedError
 
 # parameters for evolutionary algorithm
-P = 100  # The size of population in each generation
-N = 500  # How many generations of population to be searched
+P = 8  # The size of population in each generation
+N = 3  # How many generations of population to be searched
 r = 0.25  # The ratio of networks that are used as parents for next generation
 params = {
     'constraint_type': constraint_type,  # Let's do FLOPs-constrained search
@@ -113,21 +120,26 @@ params = {
 }
 
 # build the evolution finder
+logger.info('Create Evolution Finder')
 finder = EvolutionFinder(**params)
 
 # find optimal subnet
 start = time.time()
+logger.info('Start evolution search')
 best_valids, best_info = finder.run_evolution_search()
+logger.info('Finished evolution search')
 end = time.time()
 
 predicted_accuracy, subnet_config, estimated_latency = best_info
-print('\n*****'
-      '\nBest architecture for latency constrain <= %.2f ms'
-      '\nIt achieves %.2f%s predicted accuracy with %.2f ms latency.'
-      '\nSubnet configuration: \n%s'
-      '\nNAS took %.2f seconds.'
-      '\n*****' %
-      (latency_constraint, predicted_accuracy * 100, '%', estimated_latency, str(subnet_config), end - start))
+info_string = ('\n*****'
+               '\nBest architecture for latency constrain <= %.2f ms'
+               '\nIt achieves %.2f%s predicted accuracy with %.2f ms latency.'
+               '\nSubnet configuration: \n%s'
+               '\nNAS took %.2f seconds.'
+               '\n*****' %
+               (latency_constraint, predicted_accuracy * 100, '%', estimated_latency, str(subnet_config), end - start))
+logger.info(info_string)
+print(info_string)
 
 # result to csv file
 csv_writer.writerow(
@@ -143,7 +155,8 @@ output_file.flush()
 
 # visualize subnet config
 drawing = Visualisation()
-fig = drawing.mbv3_barchart(subnet_config, save_path=parent_folder + (architecture_config_2_str(subnet_config) + '.png'),
-                            title=(('Latency Constrain: %dms \nAccuracy: %.2f' % (latency_constraint, predicted_accuracy*100)) + '%'))
+fig = drawing.mbv3_barchart(subnet_config,
+                            save_path=parent_folder + (architecture_config_2_str(subnet_config) + '.png'),
+                            title=(('Latency Constrain: %dms \nAccuracy: %.2f' % (
+                            latency_constraint, predicted_accuracy * 100)) + '%'))
 pickle.dump(fig, open(parent_folder + architecture_config_2_str(subnet_config) + '.pickle', 'wb'))
-

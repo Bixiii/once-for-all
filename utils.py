@@ -1,4 +1,7 @@
 import os
+import matplotlib.pyplot as plt
+import logging
+from datetime import datetime
 
 import torch
 from torch.onnx import *
@@ -36,8 +39,21 @@ def architecture_config_2_str(architecture_config):
         config_str += str(d)
     if 'r' in architecture_config:
         config_str += '-r' + str(architecture_config['r'])
-    if 'image_size' in architecture_config:
+    elif 'image_size' in architecture_config:
         config_str += '-r' + str(architecture_config['image_size'])
     return config_str
 
 
+def show_pickle(fig):
+    dummy = plt.figure()
+    new_manager = dummy.canvas.manager
+    new_manager.canvas.figure = fig
+    fig.set_canvas(new_manager.canvas)
+
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    filename='logs/' + datetime.now().strftime('%Y%m%d_%H-%M-%S') + '.log',
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)7s @:%(pathname)s:%(lineno)d: %(message)s'
+)

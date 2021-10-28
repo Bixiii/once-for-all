@@ -2,6 +2,7 @@ import copy
 import random
 from tqdm import tqdm
 import numpy as np
+from utils import logger
 
 __all__ = ['EvolutionFinder']
 
@@ -78,7 +79,7 @@ class EvolutionFinder:
 
         self.mutate_prob = kwargs.get('mutate_prob', 0.1)
         self.population_size = kwargs.get('population_size', 100)
-        self.max_time_budget = kwargs.get('max_time_budget', 500)
+        self.max_time_budget = kwargs.get('max_time_budget', 500)  # num generations
         self.parent_ratio = kwargs.get('parent_ratio', 0.25)
         self.mutation_ratio = kwargs.get('mutation_ratio', 0.5)
 
@@ -110,13 +111,15 @@ class EvolutionFinder:
     def set_efficiency_constraint(self, new_constraint):
         self.efficiency_constraint = new_constraint
 
+    # TODO
     def random_sample(self):
         constraint = self.efficiency_constraint
-        while True:
+        for _ in range(100):
             sample = self.arch_manager.random_sample()
             efficiency = self.efficiency_predictor.predict_efficiency(sample)
             if efficiency <= constraint:
                 return sample, efficiency
+        logger.warning('Could not find suitable sample, in 100 iterations.')
 
     def mutate_sample(self, sample):
         constraint = self.efficiency_constraint
@@ -165,10 +168,12 @@ class EvolutionFinder:
         child_pool = []
         efficiency_pool = []
         best_info = None
-        if verbose:
-            print('Generate random population...')
-        for _ in range(population_size):
+
+        logger.info('Generate random population...')
+        for iter in tqdm(range(population_size), desc='Search random sample with %s constraint (%s)'
+                                                   % (self.constraint_type, self.efficiency_constraint)):
             sample, efficiency = self.random_sample()
+            logger.info('Found random sample %d' % iter)
             child_pool.append(sample)
             efficiency_pool.append(efficiency)
 
@@ -176,14 +181,15 @@ class EvolutionFinder:
         for i in range(population_size):
             population.append((accs[i].item(), child_pool[i], efficiency_pool[i]))
 
-        if verbose:
-            print('Start Evolution...')
+        logger.info('Start Evolution...')
         # After the population is seeded, proceed with evolving the population.
-        for iter in tqdm(range(max_time_budget), desc='Searching with %s constraint (%s)' % (self.constraint_type, self.efficiency_constraint)):
+        for iter in tqdm(range(max_time_budget),
+                         desc='Searching with %s constraint (%s)' % (self.constraint_type, self.efficiency_constraint)):
             parents = sorted(population, key=lambda x: x[0])[::-1][:parents_size]
             acc = parents[0][0]
             if verbose:
                 print('Iter: {} Acc: {}'.format(iter - 1, parents[0][0]))
+            logger.info('Iter: {} Acc: {} Config: {}'.format(iter - 1, parents[0][0], parents[0][1]))
 
             if acc > best_valids[-1]:
                 best_valids.append(acc)

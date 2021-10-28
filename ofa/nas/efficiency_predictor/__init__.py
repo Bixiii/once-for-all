@@ -2,10 +2,9 @@
 # Han Cai, Chuang Gan, Tianzhe Wang, Zhekai Zhang, Song Han
 # International Conference on Learning Representations (ICLR), 2020.
 
-import os
 import copy
 
-from utils import architecture_config_2_str, project_root
+from utils import *
 
 from .latency_lookup_table import *
 
@@ -113,6 +112,7 @@ class AnnetteLatencyModel(BaseEfficiencyModel):
         self.annette_converter = AnnetteConverter(network_template)
 
     def predict_efficiency(self, arch_dict):
+        # logger.debug('Start ANNETTE efficiency prediction')
         annette_network = self.annette_converter.create_annette_format(ks=arch_dict['ks'], e=arch_dict['e'],
                                                                        d=arch_dict['d'], r=arch_dict['image_size'])
         # save file
@@ -128,6 +128,7 @@ class AnnetteLatencyModel(BaseEfficiencyModel):
         self.opt.run_optimization(model)
         res = self.mod.estimate_model(model)
 
+        # logger.debug('Finished ANNETTE efficiency prediction')
         return res[0]
 
     def get_efficiency(self, arch_dict):
