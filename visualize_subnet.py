@@ -1,11 +1,63 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import utils
 
 
 class Visualisation:
     def __init__(self):
         self.mbv3_base_stage_width = [16, 24, 24, 24, 24, 40, 40, 40, 40, 80, 80, 80, 80, 112, 112, 112, 112, 160, 160,
                                       160, 160]
+
+    def mbv3_barchart_relative(self, subnet_config, save_path=None, title=None, show=False):
+        layers = []
+        for i in range(1, 21):
+
+            if i <= subnet_config['d'][int((i - 1) / 4)] + int((i - 1) / 4) * 4:
+                active = True
+            else:
+                active = False
+
+            layers.append({'idx': i,
+                           'active': active,
+                           'e': subnet_config['e'][i - 1] * self.mbv3_base_stage_width[i - 1],
+                           'ks': subnet_config['ks'][i - 1]})
+
+        bar_idx = [layer['idx'] for layer in layers]
+        bar_length = []
+        bar_height = []
+        for idx in range(0, 20):  # TODO why tf is this list only 20 long?
+            if layers[idx]['active']:
+                bar_length.append(layers[idx]['e'] / (self.mbv3_base_stage_width[idx] * 6 ) * 100)
+                bar_height.append(layers[idx]['ks'] / 8)
+            else:
+                bar_length.append(0)
+                bar_height.append(0)
+
+        fig, ax = plt.subplots()
+        plt.rcdefaults()
+
+        chart = plt.barh(bar_idx, bar_length, align='edge', alpha=0.5, color='blue')
+
+        for i, obj in enumerate(chart):
+            obj.set_height(bar_height[i])
+
+        ax.invert_yaxis()
+        ax.set_yticks(bar_idx)
+        ax.set_yticklabels(bar_idx)
+
+        if title is not None:
+            ax.set_title(title)
+        ax.set_ylabel('layer index')
+        ax.set_xlabel('number of channels')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+
+        if save_path is not None:
+            plt.savefig(save_path)
+        if show:
+            plt.show()
+
+        return fig
 
     def mbv3_barchart(self, subnet_config, save_path=None, title=None, show=False):
         layers = []
