@@ -12,7 +12,7 @@ from ofa.nas.efficiency_predictor import AnnetteLatencyModel
 from ofa.tutorial import AccuracyPredictor, LatencyTable, EvolutionFinder, FLOPsTable
 from utils import architecture_config_2_str
 from visualize_subnet import Visualisation
-from utils import logger
+from utils import logger, dict_2_str
 
 """
 NAS for MobileNetV3 and Imagenet using pretrained networks from OnceForAll publication
@@ -41,11 +41,6 @@ latency_constraint = args.latency
 constraint_type = args.constrain_type
 annette_model = args.annette_model
 parent_folder = 'results/'
-
-# TODO remove temporary parameters
-latency_constraint = 10
-constraint_type = 'annette'
-annette_model = 'dnndk-mixed'
 
 # set random seed
 random_seed = 1
@@ -104,8 +99,8 @@ else:
     raise NotImplementedError
 
 # parameters for evolutionary algorithm
-P = 8  # The size of population in each generation
-N = 3  # How many generations of population to be searched
+P = 100  # The size of population in each generation
+N = 500  # How many generations of population to be searched
 r = 0.25  # The ratio of networks that are used as parents for next generation
 params = {
     'constraint_type': constraint_type,  # Let's do FLOPs-constrained search
@@ -121,6 +116,7 @@ params = {
 
 # build the evolution finder
 logger.info('Create Evolution Finder')
+logger.info('Parameters for NAS:\n%s' % dict_2_str(params))
 finder = EvolutionFinder(**params)
 
 # find optimal subnet

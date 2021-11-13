@@ -44,6 +44,13 @@ def architecture_config_2_str(architecture_config):
     return config_str
 
 
+def dict_2_str(dict):
+    string_representation = ''
+    for [k, v] in dict.items():
+        string_representation += str(k) + ': ' + str(v) + '\n'
+    return string_representation
+
+
 def show_pickle(fig):
     dummy = plt.figure()
     new_manager = dummy.canvas.manager
