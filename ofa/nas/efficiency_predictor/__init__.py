@@ -85,27 +85,36 @@ class Mbv3LatencyModel(BaseEfficiencyModel):
 
 class AnnetteLatencyModel(BaseEfficiencyModel):
 
+    mappings = ['dnndk', 'ov']  # dnndk <- Xlinx ZCU 10, 2ov <- open vino
+    layers = ['dnndk-mixed',
+              'dnndk-ref_roofline',
+              'dnndk-roofline',
+              'dnndk-statistical',  # statistical <- random forest
+              'ncs2-mixed',  # ncs2 <- intel neural compute stick
+              'ncs2-ref_roofline',
+              'ncs2-roofline',
+              'ncs2-statistical',
+              ]
+
     def __init__(self, ofa_net, model='dnndk-mixed'):
         super().__init__(ofa_net)
         os.makedirs('./exp/tmp/', exist_ok=True)
-        mappings = ['dnndk', 'ov']  # dnndk <- Xlinx ZCU 10, 2ov <- open vino
-        layers = ['dnndk-mixed',
-                  'dnndk-ref_roofline',
-                  'dnndk-roofline',
-                  'dnndk-statistical',  # statistical <- random forest
-                  'ncs2-mixed',  # ncs2 <- intel neural compute stick
-                  'ncs2-ref_roofline',
-                  'ncs2-roofline',
-                  'ncs2-statistical',
-                  ]
 
-        assert(model in layers)
+        assert(model in AnnetteLatencyModel.layers)
         layer = model
-        mapping = mappings[0]
+
+        if 'dnndk' in layer:
+            mapping = 'dnndk'
+        elif 'ncs2' in layer:
+            mapping = 'ov'
+        else:
+            raise NotImplementedError
 
         # load models
         self.opt = Mapping_model.from_json(get_database('models', 'mapping', mapping + '.json'))
         self.mod = Layer_model.from_json(get_database('models', 'layer', layer + '.json'))
+
+        logger.info('Initialized Annette with layer model <%s> and mapping model <%s>' % (layer, mapping))
 
         # set up ofa-2-annette converter
         network_template = project_root() + '/resources/generalized_mbv3.json'
