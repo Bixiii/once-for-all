@@ -1,4 +1,5 @@
 import argparse
+import json
 import time
 import torch
 import random
@@ -31,16 +32,30 @@ annette_models = ['dnndk-mixed',
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--latency', type=float, default=10.0, help='Latency constrain')
-parser.add_argument('--constrain_type', type=str, default='flops', choices=['annette', 'flops'],
+parser.add_argument('--constrain_type', type=str, default='flops', choices=['annette', 'flops', 'latency'],
                     help='Mechanism used for latency estimation')
 parser.add_argument('--annette_model', type=str, default=None, choices=annette_models,
                     help='Select which model should be used for ANNETTE latency estimation')
 args = parser.parse_args()
 
-latency_constraint = args.latency
-constraint_type = args.constrain_type
+# mbv3_random_config = {'ks': [3, 3, 3, 3, 3, 5, 5, 5, 5, 3, 3, 3, 3, 3, 3, 3, 3, 5, 5, 5],
+#                        'e': [3, 4, 6, 4, 6, 6, 4, 4, 4, 3, 3, 4, 6, 4, 6, 6, 4, 4, 4, 6],
+#                        'd': [2, 3, 4, 2, 3],
+#                        'r': [224],
+#                        'image_size': [224]
+#                        }
+mbv3_max_config = {'ks': [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7],
+                   'e':  [6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6],
+                   'd':  [4, 4, 4, 4, 4],
+                   'r':  [224],
+                   'image_size': [224]
+                   }
+
+# TODO remove local variables
+latency_constraint = args.latency_constraint
+constrain_type = args.constrain_type
 annette_model = args.annette_model
-parent_folder = 'results/'
+parent_folder = args.parent_folder
 
 # set random seed
 random_seed = 1
@@ -88,12 +103,13 @@ ofa_network = OFAMobileNetV3(
 )
 
 # efficiency predictor
-if constraint_type == 'flops':
+if constrain_type == 'flops' or constrain_type == 'latency':
     efficiency_predictor = FLOPsTable(
         device='cuda:0' if cuda_available else 'cpu',
         batch_size=1,
+        pred_type=constrain_type,
     )
-elif constraint_type == 'annette':
+elif constrain_type == 'annette':
     efficiency_predictor = AnnetteLatencyModel(ofa_network, model=annette_model)
 else:
     raise NotImplementedError
@@ -103,7 +119,7 @@ P = 100  # The size of population in each generation
 N = 500  # How many generations of population to be searched
 r = 0.25  # The ratio of networks that are used as parents for next generation
 params = {
-    'constraint_type': constraint_type,  # Let's do FLOPs-constrained search
+    'constraint_type': constrain_type,  # Let's do FLOPs-constrained search
     'efficiency_constraint': latency_constraint,
     'mutate_prob': 0.1,  # The probability of mutation in evolutionary search
     'mutation_ratio': 0.5,  # The ratio of networks that are generated through mutation in generation n >= 2.
@@ -139,7 +155,7 @@ print(info_string)
 
 # result to csv file
 csv_writer.writerow(
-    {'constrain_type': constraint_type,
+    {'constrain_type': constrain_type,
      'target_hardware': annette_model,
      'latency_constraint': latency_constraint,
      'estimated_latency': estimated_latency,
@@ -151,8 +167,15 @@ output_file.flush()
 
 # visualize subnet config
 drawing = Visualisation()
+title = (('Constrain: %.2f %s \nAccuracy: %.2f' % (
+    estimated_latency, 'MFLOPs' if constrain_type == 'flops' else 'ms', predicted_accuracy * 100)) + '%')
+
 fig = drawing.mbv3_barchart(subnet_config,
                             save_path=parent_folder + (architecture_config_2_str(subnet_config) + '.png'),
-                            title=(('Latency Constrain: %dms \nAccuracy: %.2f' % (
-                            latency_constraint, predicted_accuracy * 100)) + '%'))
+                            title=title, show_fixed=True, relative=False, show=True)
 pickle.dump(fig, open(parent_folder + architecture_config_2_str(subnet_config) + '.pickle', 'wb'))
+
+fig_rel = drawing.mbv3_barchart(subnet_config,
+                                save_path=parent_folder + (architecture_config_2_str(subnet_config) + '_relative.png'),
+                                title=title, show_fixed=True, relative=True, show=True)
+pickle.dump(fig_rel, open(parent_folder + architecture_config_2_str(subnet_config) + '_relative.pickle', 'wb'))
