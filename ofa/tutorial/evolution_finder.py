@@ -57,6 +57,7 @@ class ArchManager:
 class EvolutionFinder:
     valid_constraint_range = {
         'flops': [150, 600],
+        'latency': [1, 10],
         'note10': [15, 60],
         'annette': [1, 10]
     }
@@ -114,12 +115,15 @@ class EvolutionFinder:
     # TODO
     def random_sample(self):
         constraint = self.efficiency_constraint
-        for _ in range(100):
+        iteration = 0
+        while True:
+            iteration = iteration + 1
             sample = self.arch_manager.random_sample()
             efficiency = self.efficiency_predictor.predict_efficiency(sample)
             if efficiency <= constraint:
                 return sample, efficiency
-        logger.warning('Could not find suitable sample, in 100 iterations.')
+            if iteration % 1000 == 0:
+                logger.warning('Could not find suitable sample, in %d iterations.' % iteration)
 
     def mutate_sample(self, sample):
         constraint = self.efficiency_constraint
