@@ -50,6 +50,8 @@ class AccuracyPredictor:
     # TODO: merge it with serialization utils.
     @torch.no_grad()
     def predict_accuracy(self, population):
+        if not isinstance(population, list):
+            population = [population]
         all_feats = []
         for sample in population:
             ks_list = copy.deepcopy(sample['ks'])
