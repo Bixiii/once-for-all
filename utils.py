@@ -15,7 +15,8 @@ def export_as_onnx(net, file_name, image_size=224):
 
 def export_as_dynamic_onnx(net, file_name, image_size=224):
     x = torch.randn(1, 3, image_size, image_size, requires_grad=True).cpu()
-    torch.onnx.export(net, x, file_name, export_params=True, operator_export_type=OperatorExportTypes.ONNX_ATEN_FALLBACK)
+    torch.onnx.export(net, x, file_name, export_params=True,
+                      operator_export_type=OperatorExportTypes.ONNX_ATEN_FALLBACK)
 
 
 def count_flops(net, input_shape=(3, 32, 32)):
@@ -64,3 +65,48 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s %(levelname)7s @:%(pathname)s:%(lineno)d: %(message)s'
 )
+
+# frequently used network configurations
+mbv3_max_config = {
+    'ks': [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7],
+    'e': [6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6],
+    'd': [4, 4, 4, 4, 4],
+    'r': [224],
+    'image_size': [224]
+}
+
+mbv3_min_config = {
+    'ks': [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3],
+    'e': [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3],
+    'd': [2, 2, 2, 2, 2],
+    'r': [160],
+    'image_size': [160]
+}
+
+mbv3_random_config = {
+    'ks': [3, 3, 3, 3, 3, 5, 5, 5, 5, 3, 3, 3, 3, 3, 3, 3, 3, 5, 5, 5],
+    'e': [3, 4, 6, 4, 6, 6, 4, 4, 4, 3, 3, 4, 6, 4, 6, 6, 4, 4, 4, 6],
+    'd': [2, 3, 4, 2, 3],
+    'r': [224],
+    'image_size': [224]
+}
+
+
+@torch.no_grad()
+def count_flops_thop(network: torch.nn.Module, input_size: tuple):
+    import thop
+    inputs = torch.randn(*input_size, device='cuda:0')
+    network = network.to('cuda:0')
+    network.eval()
+    # rm_bn_from_net(network)
+    flops, params = thop.profile(network, (inputs,), verbose=False)
+    return flops / 1e6
+
+
+@torch.no_grad()
+def count_flops_pthflops(network: torch.nn.Module, input_size: tuple):
+    from pthflops import count_ops
+    inputs = torch.randn(*input_size, device='cuda:0')
+    network = network.to('cuda:0')
+    network.eval()
+    return count_ops(network, inputs, verbose=False)[0] / 1e6
