@@ -1,5 +1,4 @@
 import argparse
-import json
 import time
 import torch
 import random
@@ -19,43 +18,19 @@ from utils import logger, dict_2_str
 NAS for MobileNetV3 and Imagenet using pretrained networks from OnceForAll publication
 """
 
-# dnndk = Xlinx ZCU 10, ncs2 = intel neural compute stick
-annette_models = ['dnndk-mixed',
-                  'dnndk-ref_roofline',
-                  'dnndk-roofline',
-                  'dnndk-statistical',
-                  'ncs2-mixed',
-                  'ncs2-ref_roofline',
-                  'ncs2-roofline',
-                  'ncs2-statistical',
-                  ]
-
 parser = argparse.ArgumentParser()
 parser.add_argument('--latency', type=float, default=10.0, help='Latency constrain')
 parser.add_argument('--constrain_type', type=str, default='flops', choices=['annette', 'flops', 'latency'],
                     help='Mechanism used for latency estimation')
-parser.add_argument('--annette_model', type=str, default=None, choices=annette_models,
+parser.add_argument('--annette_model', type=str, default=None, choices=AnnetteLatencyModel.layers,
                     help='Select which model should be used for ANNETTE latency estimation')
 args = parser.parse_args()
 
-# mbv3_random_config = {'ks': [3, 3, 3, 3, 3, 5, 5, 5, 5, 3, 3, 3, 3, 3, 3, 3, 3, 5, 5, 5],
-#                        'e': [3, 4, 6, 4, 6, 6, 4, 4, 4, 3, 3, 4, 6, 4, 6, 6, 4, 4, 4, 6],
-#                        'd': [2, 3, 4, 2, 3],
-#                        'r': [224],
-#                        'image_size': [224]
-#                        }
-mbv3_max_config = {'ks': [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7],
-                   'e':  [6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6],
-                   'd':  [4, 4, 4, 4, 4],
-                   'r':  [224],
-                   'image_size': [224]
-                   }
-
-# TODO remove local variables
-latency_constraint = args.latency_constraint
+latency_constraints = args.latency
 constrain_type = args.constrain_type
 annette_model = args.annette_model
-parent_folder = args.parent_folder
+
+parent_folder = 'results/'
 
 # set random seed
 random_seed = 1
@@ -86,7 +61,6 @@ accuracy_predictor = AccuracyPredictor(
     pretrained=True,
     device='cuda:0' if cuda_available else 'cpu'
 )
-# print(accuracy_predictor.model)
 
 # OFA network
 ks_list = [3, 5, 7]
@@ -114,68 +88,73 @@ elif constrain_type == 'annette':
 else:
     raise NotImplementedError
 
-# parameters for evolutionary algorithm
-P = 100  # The size of population in each generation
-N = 500  # How many generations of population to be searched
-r = 0.25  # The ratio of networks that are used as parents for next generation
-params = {
-    'constraint_type': constrain_type,  # Let's do FLOPs-constrained search
-    'efficiency_constraint': latency_constraint,
-    'mutate_prob': 0.1,  # The probability of mutation in evolutionary search
-    'mutation_ratio': 0.5,  # The ratio of networks that are generated through mutation in generation n >= 2.
-    'efficiency_predictor': efficiency_predictor,  # To use a predefined efficiency predictor.
-    'accuracy_predictor': accuracy_predictor,  # To use a predefined accuracy_predictor predictor.
-    'population_size': P,
-    'max_time_budget': N,
-    'parent_ratio': r,
-}
+if not isinstance(latency_constraints, list):
+    latency_constraints = [latency_constraints]
 
-# build the evolution finder
-logger.info('Create Evolution Finder')
-logger.info('Parameters for NAS:\n%s' % dict_2_str(params))
-finder = EvolutionFinder(**params)
+for latency_constraints in latency_constraints:
+    # parameters for evolutionary algorithm
+    P = 100  # The size of population in each generation
+    N = 500  # How many generations of population to be searched
+    r = 0.25  # The ratio of networks that are used as parents for next generation
+    params = {
+        'constraint_type': constrain_type,  # Let's do FLOPs-constrained search
+        'efficiency_constraint': latency_constraints,
+        'mutate_prob': 0.1,  # The probability of mutation in evolutionary search
+        'mutation_ratio': 0.5,  # The ratio of networks that are generated through mutation in generation n >= 2.
+        'efficiency_predictor': efficiency_predictor,  # To use a predefined efficiency predictor.
+        'accuracy_predictor': accuracy_predictor,  # To use a predefined accuracy_predictor predictor.
+        'population_size': P,
+        'max_time_budget': N,
+        'parent_ratio': r,
+    }
 
-# find optimal subnet
-start = time.time()
-logger.info('Start evolution search')
-best_valids, best_info = finder.run_evolution_search()
-logger.info('Finished evolution search')
-end = time.time()
+    # build the evolution finder
+    logger.info('Create Evolution Finder')
+    logger.info('Parameters for NAS:\n%s' % dict_2_str(params))
+    finder = EvolutionFinder(**params)
 
-predicted_accuracy, subnet_config, estimated_latency = best_info
-info_string = ('\n*****'
-               '\nBest architecture for latency constrain <= %.2f ms'
-               '\nIt achieves %.2f%s predicted accuracy with %.2f ms latency.'
-               '\nSubnet configuration: \n%s'
-               '\nNAS took %.2f seconds.'
-               '\n*****' %
-               (latency_constraint, predicted_accuracy * 100, '%', estimated_latency, str(subnet_config), end - start))
-logger.info(info_string)
-print(info_string)
 
-# result to csv file
-csv_writer.writerow(
-    {'constrain_type': constrain_type,
-     'target_hardware': annette_model,
-     'latency_constraint': latency_constraint,
-     'estimated_latency': estimated_latency,
-     'calculation_time': end - start,
-     'top1_acc': predicted_accuracy,
-     'net_config': str(subnet_config)
-     })
-output_file.flush()
+    # find optimal subnet
+    start = time.time()
+    logger.info('Start evolution search')
+    best_valids, best_info = finder.run_evolution_search()
+    logger.info('Finished evolution search')
+    end = time.time()
 
-# visualize subnet config
-drawing = Visualisation()
-title = (('Constrain: %.2f %s \nAccuracy: %.2f' % (
-    estimated_latency, 'MFLOPs' if constrain_type == 'flops' else 'ms', predicted_accuracy * 100)) + '%')
+    predicted_accuracy, subnet_config, estimated_latency = best_info
+    info_string = ('\n*****'
+                   '\nBest architecture for latency constrain <= %.2f ms'
+                   '\nIt achieves %.2f%s predicted accuracy with %.2f ms latency.'
+                   '\nSubnet configuration: \n%s'
+                   '\nNAS took %.2f seconds.'
+                   '\n*****' %
+                   (latency_constraints, predicted_accuracy * 100, '%', estimated_latency, str(subnet_config), end - start))
+    logger.info(info_string)
+    print(info_string)
 
-fig = drawing.mbv3_barchart(subnet_config,
-                            save_path=parent_folder + (architecture_config_2_str(subnet_config) + '.png'),
-                            title=title, show_fixed=True, relative=False, show=True)
-pickle.dump(fig, open(parent_folder + architecture_config_2_str(subnet_config) + '.pickle', 'wb'))
+    # result to csv file
+    csv_writer.writerow(
+        {'constrain_type': constrain_type,
+         'target_hardware': annette_model,
+         'latency_constraint': latency_constraints,
+         'estimated_latency': estimated_latency,
+         'calculation_time': end - start,
+         'top1_acc': predicted_accuracy,
+         'net_config': str(subnet_config)
+         })
+    output_file.flush()
 
-fig_rel = drawing.mbv3_barchart(subnet_config,
-                                save_path=parent_folder + (architecture_config_2_str(subnet_config) + '_relative.png'),
-                                title=title, show_fixed=True, relative=True, show=True)
-pickle.dump(fig_rel, open(parent_folder + architecture_config_2_str(subnet_config) + '_relative.pickle', 'wb'))
+    # visualize subnet config
+    drawing = Visualisation()
+    title = (('Constrain: %.2f %s \nAccuracy: %.2f' % (
+        estimated_latency, 'MFLOPs' if constrain_type == 'flops' else 'ms', predicted_accuracy * 100)) + '%')
+
+    fig = drawing.mbv3_barchart(subnet_config,
+                                save_path=parent_folder + (architecture_config_2_str(subnet_config) + '.png'),
+                                title=title, show_fixed=True, relative=False, show=False)
+    pickle.dump(fig, open(parent_folder + architecture_config_2_str(subnet_config) + '.pickle', 'wb'))
+
+    fig_rel = drawing.mbv3_barchart(subnet_config,
+                                    save_path=parent_folder + (architecture_config_2_str(subnet_config) + '_relative.png'),
+                                    title=title, show_fixed=True, relative=True, show=True)
+    pickle.dump(fig_rel, open(parent_folder + architecture_config_2_str(subnet_config) + '_relative.pickle', 'wb'))
