@@ -58,8 +58,8 @@ class EvolutionFinder:
     valid_constraint_range = {
         'flops': [150, 600],
         'latency': [1, 10],
-        'note10': [15, 60],
-        'annette': [1, 10]
+        'note10': [15, 100],
+        'annette': [1, 30]  # TODO difference between dnndk [4,10] and ncs2 [6,26]
     }
 
     def __init__(self, constraint_type, efficiency_constraint,
