@@ -5,24 +5,38 @@ import copy
 
 from ofa.utils import make_divisible
 
+"""
+" Convert architecture configuration as used in the OFA repo to representation, which can be used to predict the 
+" latency with ANNETTE
+" Note: only available for MobileNetV3
+"""
+
 
 class AnnetteConverter:
     def __init__(self, template_file_path):
-        # available choices
+        # configurations for OFA network
         self.img_sizes = [160, 176, 192, 208, 224]
         self.kernel_sizes = [3, 5, 7]
         self.expand_values = [3, 4, 6]
         self.depth_values = [2, 3, 4]
 
-        # constants
+        # define constant of MobileNetV3 architecture
+        # define stage width
         self.base_stage_width = [16, 24, 24, 24, 24, 40, 40, 40, 40, 80, 80, 80, 80, 112, 112, 112, 112, 160, 160, 160,
                                  160]
-        self.se_reduction = 4  # squeeze and expand reduction
+
+        # define the parameters for the squeeze and expand reductions (special MobileNetV3 blocks)
+        self.se_reduction = 4
         self.divisor = 8
 
+        # load the file that contains the template for the ANNETTE format for MobileNetV3
         fd = open(template_file_path)
         self.mbv3_template = json.load(fd)
         fd.close()
+
+        ######################################################################################################
+        # define the values in the MobileNetV3 architecture that are needed for different OFA-configurations #
+        ######################################################################################################
 
         # first group
         self.stage2_child1 = {2: '"948"',
@@ -128,7 +142,6 @@ class AnnetteConverter:
 
     def create_annette_format(self, ks, e, d, r=224):
         """
-
         Args:
             ks (): list kernel sizes of architecture configuration
             e (): list expand values of architecture configuration
@@ -136,13 +149,12 @@ class AnnetteConverter:
             r (): resolution
 
         Returns: json string representing net in ANNETTE format
-
         """
-        start = datetime.datetime.now()
 
         if isinstance(r, list):
             r = r[0]
 
+        # load the ANNETTE MobileNetV3 template
         mbv3_annette = copy.deepcopy(self.mbv3_template)
 
         # remove unneeded blocks (skip layers)
@@ -182,7 +194,7 @@ class AnnetteConverter:
 
         mbv3_annette = json.dumps(mbv3_annette, indent=4)
 
-        # define fields for replacement
+        # define fields thant need to be replaced to fit the architecture configuration and the new values
         replace_pattern = {
             '"img_size"': '%d' % r,
             '"img_size_2"': '%d' % (r / 2),
@@ -272,15 +284,11 @@ class AnnetteConverter:
             '"stage19_child2"': '%s' % (self.stage19_child2[d[4]]),
             '"stage21_parent"': '%s' % (self.stage21_parent[d[4]]),
         }
+        # define replace pattern
         replace_patterns = dict((re.escape(k), v) for k, v in replace_pattern.items())
         pattern = re.compile(("|".join(replace_patterns.keys())))
 
-        # replace fields with actual values
+        # replace values to create ANNETTE format for the given architecture configuration
         mbv3_annette = pattern.sub(lambda m: replace_patterns[re.escape(m.group(0))], mbv3_annette)
 
-        end = datetime.datetime.now()
-        # print('Converted to ANNETTE in %.0f ms' % ((end - start).total_seconds() * 1000))
-
         return mbv3_annette
-
-
