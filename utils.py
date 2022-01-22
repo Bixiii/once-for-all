@@ -29,9 +29,10 @@ def project_root():
 
 def architecture_config_2_str(architecture_config):
     config_str = ''
-    config_str = 'ks'
-    for ks in architecture_config['ks']:
-        config_str += str(ks)
+    if 'ks' in architecture_config:
+        config_str = 'ks'
+        for ks in architecture_config['ks']:
+            config_str += str(ks)
     config_str += '-e'
     for e in architecture_config['e']:
         config_str += str(e)
@@ -110,3 +111,8 @@ def count_flops_pthflops(network: torch.nn.Module, input_size: tuple):
     network = network.to('cuda:0')
     network.eval()
     return count_ops(network, inputs, verbose=False)[0] / 1e6
+
+
+def timestamp_string():
+    time = datetime.now()
+    return time.strftime('%Y%m%d_%H-%M-%S')
