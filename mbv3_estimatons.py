@@ -10,6 +10,7 @@ from ofa.nas.efficiency_predictor import AnnetteLatencyModel
 from ofa.tutorial import AccuracyPredictor, LatencyTable, FLOPsTable
 import utils
 from ofa.utils.pytorch_utils import count_net_flops
+from result_net_configs import *
 
 """
 " Evaluate subnets (their config has to be given) with different latency estimators and with their predicted accuracy
@@ -20,7 +21,8 @@ from ofa.utils.pytorch_utils import count_net_flops
 ################################
 
 # define subnetwork configurations, which should be evaluated
-network_configs = utils.mbv3_min_config
+# network_configs = utils.mbv3_min_config
+network_configs = flop_constrained
 
 # select which estimators should be used, the results are written to a CSV-file
 csv_fields = [
@@ -33,6 +35,8 @@ csv_fields = [
     'flops_pthflops',
     'flops_thop',
     'flops_pytorch',
+    'annette_ncs2_mixed',
+    'note10',
 ]
 
 # define where the output CSV-file with the results should be stored
@@ -120,12 +124,25 @@ for network_config in network_configs:
         results['estimated_latency'] = estimated_latency
         print('> Efficiency (local estimated latency): ', estimated_latency)
 
+    if 'note10' in csv_fields:
+        efficiency_predictor = LatencyTable()
+        estimated_latency_not10 = efficiency_predictor.predict_efficiency(network_config)
+        results['note10'] = estimated_latency_not10
+        print('> Efficiency: (estimated latency note10)', estimated_latency_not10)
+
     # estimate the latency with ANNETTE with the model DNNDK-mixed
     if 'annette_dnndk_mixed' in csv_fields:
         efficiency_predictor = AnnetteLatencyModel(ofa_network, model='dnndk-mixed')
         annette_dnndk_mixed = efficiency_predictor.predict_efficiency(network_config)
         results['annette_dnndk_mixed'] = annette_dnndk_mixed
         print('> Efficiency (annette-dnndk-mixed): ', annette_dnndk_mixed)
+
+    # estimate the latency with ANNETTE with the model NCS2-mixed
+    if 'annette_ncs2_mixed' in csv_fields:
+        efficiency_predictor = AnnetteLatencyModel(ofa_network, model='ncs2-mixed')
+        annette_ncs2_mixed = efficiency_predictor.predict_efficiency(network_config)
+        results['annette_ncs2_mixed'] = annette_ncs2_mixed
+        print('> Efficiency (annette-ncs2-mixed): ', annette_ncs2_mixed)
 
     # the counted FLOPs vary dependent on which library is used, approximately the are the same
     # count FLOPs with the library pthflops
