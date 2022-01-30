@@ -40,7 +40,8 @@ def architecture_config_2_str(architecture_config):
     for d in architecture_config['d']:
         config_str += str(d)
     if 'r' in architecture_config:
-        config_str += '-r' + str(architecture_config['r'])
+        resolution = architecture_config['r'] if architecture_config['r'] is list else architecture_config['r'][0]
+        config_str += '-r' + str(resolution)
     elif 'image_size' in architecture_config:
         config_str += '-r' + str(architecture_config['image_size'])
     return config_str
