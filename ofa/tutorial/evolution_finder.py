@@ -62,15 +62,15 @@ class EvolutionFinder:
         'annette': [1, 30]  # TODO difference between dnndk [4,10] and ncs2 [6,26]
     }
 
-    def __init__(self, constraint_type, efficiency_constraint,
-                 efficiency_predictor, accuracy_predictor, **kwargs):
+    def __init__(self, constraint_type,
+                 efficiency_predictor, accuracy_predictor, efficiency_constraint=0, **kwargs):
         self.constraint_type = constraint_type
         if not constraint_type in self.valid_constraint_range.keys():
             self.invite_reset_constraint_type()
         self.efficiency_constraint = efficiency_constraint
-        if not (efficiency_constraint <= self.valid_constraint_range[constraint_type][1] and
-                efficiency_constraint >= self.valid_constraint_range[constraint_type][0]):
-            self.invite_reset_constraint()
+        # if not (efficiency_constraint <= self.valid_constraint_range[constraint_type][1] and
+        #         efficiency_constraint >= self.valid_constraint_range[constraint_type][0]):
+        #     self.invite_reset_constraint()
 
         self.efficiency_predictor = efficiency_predictor
         self.accuracy_predictor = accuracy_predictor
@@ -159,8 +159,9 @@ class EvolutionFinder:
             if efficiency <= constraint:
                 return new_sample, efficiency
 
-    def run_evolution_search(self, verbose=False):
+    def run_evolution_search(self, efficiency_constraint, verbose=False):
         """Run a single roll-out of regularized evolution to a fixed time budget."""
+        self.set_efficiency_constraint(efficiency_constraint)
         max_time_budget = self.max_time_budget
         population_size = self.population_size
         mutation_numbers = int(round(self.mutation_ratio * population_size))

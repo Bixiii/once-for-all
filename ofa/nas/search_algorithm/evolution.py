@@ -63,7 +63,7 @@ class EvolutionFinder:
             if efficiency <= constraint:
                 return new_sample, efficiency
 
-    def run_evolution_search(self, constraint, verbose=False, **kwargs):
+    def run_evolution_search(self, efficiency_constraint, verbose=False, **kwargs):
         """Run a single roll-out of regularized evolution to a fixed time budget."""
         self.update_hyper_params(kwargs)
 
@@ -78,7 +78,7 @@ class EvolutionFinder:
         if verbose:
             print('Generate random population...')
         for _ in range(self.population_size):
-            sample, efficiency = self.random_valid_sample(constraint)
+            sample, efficiency = self.random_valid_sample(efficiency_constraint)
             child_pool.append(sample)
             efficiency_pool.append(efficiency)
 
@@ -89,7 +89,7 @@ class EvolutionFinder:
         if verbose:
             print('Start Evolution...')
         # After the population is seeded, proceed with evolving the population.
-        with tqdm(total=self.max_time_budget, desc='Searching with constraint (%s)' % constraint,
+        with tqdm(total=self.max_time_budget, desc='Searching with constraint (%s)' % efficiency_constraint,
                   disable=(not verbose)) as t:
             for i in range(self.max_time_budget):
                 parents = sorted(population, key=lambda x: x[0])[::-1][:parents_size]
@@ -113,7 +113,7 @@ class EvolutionFinder:
                 for j in range(mutation_numbers):
                     par_sample = population[np.random.randint(parents_size)][1]
                     # Mutate
-                    new_sample, efficiency = self.mutate_sample(par_sample, constraint)
+                    new_sample, efficiency = self.mutate_sample(par_sample, efficiency_constraint)
                     child_pool.append(new_sample)
                     efficiency_pool.append(efficiency)
 
@@ -121,7 +121,7 @@ class EvolutionFinder:
                     par_sample1 = population[np.random.randint(parents_size)][1]
                     par_sample2 = population[np.random.randint(parents_size)][1]
                     # Crossover
-                    new_sample, efficiency = self.crossover_sample(par_sample1, par_sample2, constraint)
+                    new_sample, efficiency = self.crossover_sample(par_sample1, par_sample2, efficiency_constraint)
                     child_pool.append(new_sample)
                     efficiency_pool.append(efficiency)
 
