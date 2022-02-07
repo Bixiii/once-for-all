@@ -10,7 +10,7 @@ import pickle
 
 from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3, OFAResNets
 
-from ofa.nas.efficiency_predictor import AnnetteLatencyModel
+from ofa.nas.efficiency_predictor import AnnetteLatencyModel, AnnetteLatencyModelResNet50
 
 from visualize_subnet import Visualisation
 from utils import architecture_config_2_str, logger, dict_2_str
@@ -116,6 +116,8 @@ def resnet_predictors(population_size, max_time_budget, parent_ratio, constraint
     # efficiency predictor
     if constrain_type == 'flops':
         efficiency_predictor = ResNet50FLOPsModel(ofa_network)
+    elif constraint_type == 'annette':
+        efficiency_predictor = AnnetteLatencyModelResNet50(ofa_network, annette_model)
     else:
         raise NotImplementedError
 
@@ -154,9 +156,9 @@ args = parser.parse_args()
 # annette_model = args.annette_model
 # TODO remove local definitions before committing
 net = 'ResNet50'
-latency_constraints = [5000, 4500, 4000, 3500, 3000, 2500, 2000, 1500, 1000, 750, 500]
-constrain_type = 'flops'
-annette_model = None
+latency_constraints = [12, 10, 11, 13, 8]
+constrain_type = 'annette'
+annette_model = 'dnndk-mixed'
 
 parent_folder = 'results/'
 
@@ -185,14 +187,14 @@ if write_header:
     csv_writer.writeheader()
 
 # parameters for evolutionary algorithm
-P = 100  # The size of population in each generation
-N = 500  # How many generations of population to be searched
+P = 75  # The size of population in each generation
+N = 250  # How many generations of population to be searched
 r = 0.25  # The ratio of networks that are used as parents for next generation
 
 if net == 'MobileNetV3':
     ofa_network, evolution_finder = mobilenet_predictors(P, N, r, constrain_type)
 elif net == 'ResNet50':
-    ofa_network, evolution_finder = resnet_predictors(P, N, r, constrain_type)
+    ofa_network, evolution_finder = resnet_predictors(P, N, r, constrain_type)  # TODO here I need to integrate Annette
 else:
     raise NotImplementedError
 

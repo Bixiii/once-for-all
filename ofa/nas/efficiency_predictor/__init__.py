@@ -12,7 +12,10 @@ from generate_annette_format import AnnetteConverter
 from annette import get_database
 from annette.estimation.layer_model import Layer_model
 from annette.estimation.mapping_model import Mapping_model
-from annette.graph import AnnetteGraph
+from annette.graph import AnnetteGraph, ONNXGraph
+from pathlib import Path
+import onnx
+from onnxsim import simplify
 
 
 class BaseEfficiencyModel:
@@ -138,6 +141,76 @@ class AnnetteLatencyModel(BaseEfficiencyModel):
         res = self.mod.estimate_model(model)
 
         # logger.debug('Finished ANNETTE efficiency prediction')
+        return res[0]
+
+    def get_efficiency(self, arch_dict):
+        return self.predict_efficiency(arch_dict)
+
+
+class AnnetteLatencyModelResNet50(BaseEfficiencyModel):
+
+    mappings = ['dnndk', 'ov']  # dnndk <- Xlinx ZCU 10, 2ov <- open vino
+    layers = ['dnndk-mixed',
+              'dnndk-ref_roofline',
+              'dnndk-roofline',
+              'dnndk-statistical',  # statistical <- random forest
+              'ncs2-mixed',  # ncs2 <- intel neural compute stick
+              'ncs2-ref_roofline',
+              'ncs2-roofline',
+              'ncs2-statistical',
+              ]
+
+    def __init__(self, ofa_net, model='dnndk-mixed'):
+        super().__init__(ofa_net)
+        os.makedirs('./tmp/', exist_ok=True)
+
+        assert(model in AnnetteLatencyModel.layers)
+        layer = model
+
+        if 'dnndk' in layer:
+            mapping = 'dnndk'
+        elif 'ncs2' in layer:
+            mapping = 'ov'
+        else:
+            raise NotImplementedError
+
+        # load models
+        self.opt = Mapping_model.from_json(get_database('models', 'mapping', mapping + '.json'))
+        self.mod = Layer_model.from_json(get_database('models', 'layer', layer + '.json'))
+
+        logger.info('Initialized Annette with layer model <%s> and mapping model <%s>' % (layer, mapping))
+
+    def predict_efficiency(self, arch_dict):
+
+        logger.debug('Start ANNETTE efficiency prediction')
+        # get ANNETTE latency estimation: export as ONNX, load ONNX for ANNETTE, make prediction
+        subnet = self.ofa_net.get_active_subnet(
+            self.ofa_net.set_active_subnet(d=arch_dict['d'], e=arch_dict['e'], w=arch_dict['w']))
+
+        model_file_name = './tmp/' + timestamp_string() + '.onnx'
+        simplified_model_file_name = './tmp/' + timestamp_string() + 'simplified.onnx'
+        annette_model_file_name = './tmp/' + timestamp_string() + '.json'
+        export_as_onnx(subnet, model_file_name)
+
+        onnx_model = onnx.load(model_file_name)
+        simplified_model, check = simplify(onnx_model)
+        onnx.save(simplified_model, simplified_model_file_name)
+
+        onnx_network = ONNXGraph(simplified_model_file_name)
+        annette_graph = onnx_network.onnx_to_annette(simplified_model_file_name, ['input.1'], name_policy='renumerate')
+        json_file = Path(annette_model_file_name)
+        annette_graph.to_json(json_file)
+
+        model = AnnetteGraph('ofa-net', annette_model_file_name)
+
+        self.opt.run_optimization(model)
+        res = self.mod.estimate_model(model)
+
+        # logger.info('Finished ANNETTE efficiency prediction, result <' + str(res[0]) + '>')
+
+        os.remove(model_file_name)
+        os.remove(simplified_model_file_name)
+        os.remove(annette_model_file_name)
         return res[0]
 
     def get_efficiency(self, arch_dict):

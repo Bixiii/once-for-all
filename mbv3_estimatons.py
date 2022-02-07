@@ -22,25 +22,24 @@ from result_net_configs import *
 
 # define subnetwork configurations, which should be evaluated
 # network_configs = utils.mbv3_min_config
-network_configs = flop_constrained
 
 # select which estimators should be used, the results are written to a CSV-file
 csv_fields = [
     'net_config',
     # 'measured_acc',
-    'predicted_acc',
-    'estimated_flops',
-    'estimated_latency',
+    # 'predicted_acc',
+    # 'estimated_flops',
+    # 'estimated_latency',
     'annette_dnndk_mixed',
-    'flops_pthflops',
-    'flops_thop',
+    # 'flops_pthflops',
+    # 'flops_thop',
     'flops_pytorch',
     'annette_ncs2_mixed',
     'note10',
 ]
 
 # define where the output CSV-file with the results should be stored
-output_file_name = './logs/ofa_optimized_subnets_add_info.csv'
+output_file_name = './logs/mbv3_flops_over_latencies.csv'
 # prepare CSV-file
 output_file = open(output_file_name, 'w', newline='')
 csv_writer = csv.DictWriter(output_file, fieldnames=csv_fields)
@@ -74,6 +73,15 @@ ofa_network = OFAMobileNetV3(
     depth_list=depth_list,
     expand_ratio_list=expand_list,
 )
+
+
+network_configs = []
+for _ in range(100):
+    subnet_config = ofa_network.sample_active_subnet()
+    img_size = random.choice([160, 176, 192, 208, 224])
+    subnet_config['r'] = [img_size]
+    subnet_config['image_size'] = [img_size]
+    network_configs.append(subnet_config)
 
 ##########################################
 # the actual evaluations start from here #
