@@ -99,15 +99,27 @@ def ofa_config_to_onnx(ofa_net_config, net_architecture_name):
 
 def main():
 
-    file = open('new_annette_flop_ncs2_estimates.txt', 'w')
-    for config in resnet50_flop_constrained:
+    nets = [
+        {'wid': None, 'ks': [5, 5, 3, 3, 5, 5, 7, 5, 5, 7, 3, 5, 7, 5, 3, 3, 7, 3, 5, 7],
+         'e': [4, 4, 6, 6, 4, 6, 4, 3, 4, 3, 4, 6, 6, 6, 6, 6, 6, 6, 6, 4], 'd': [3, 3, 3, 4, 4], 'r': [224],
+         'image_size': [224]},
+        # {'wid': None, 'ks': [3, 3, 3, 5, 5, 7, 7, 3, 7, 3, 3, 5, 7, 3, 3, 3, 7, 3, 3, 3],
+        #  'e': [4, 4, 3, 3, 4, 4, 4, 6, 4, 4, 3, 4, 6, 4, 4, 4, 6, 6, 6, 3], 'd': [2, 3, 3, 4, 4], 'r': [224],
+        #  'image_size': [224]},
+        # {'wid': None, 'ks': [3, 3, 5, 3, 5, 3, 7, 7, 5, 3, 5, 3, 3, 3, 5, 3, 3, 3, 3, 7],
+        #  'e': [4, 4, 4, 3, 3, 4, 3, 4, 4, 3, 3, 4, 4, 4, 6, 6, 6, 6, 6, 4], 'd': [2, 2, 2, 2, 3], 'r': [224],
+        #  'image_size': [224]},
+    ]
 
-        onnx_file = ofa_config_to_onnx(config, 'ResNet50')
+    file = open('new_annette_flop_ncs2_estimates.txt', 'w')
+    for config in nets:
+
+        onnx_file = ofa_config_to_onnx(config, 'MobileNetV3')
         annette_file = onnx_file[:-5] + '_ov2.json'
 
         annette_network_path = onnx_to_annette(onnx_file, inputs='input.1', annette_file_path=annette_file)
 
-        annette_estimator = AnnetteEstimator(mapping='dnndk', layers='dnndk-mixed')
+        annette_estimator = AnnetteEstimator(mapping='ov2', layers='ncs2-mixed')
         start = datetime.datetime.now()
         # latency = annette_estimator.estimate(file_path, 'mbv3')
         latency = annette_estimator.estimate(annette_network_path, 'mbv3')

@@ -47,14 +47,13 @@ def mobilenet_predictors(population_size, max_time_budget, parent_ratio, constra
     )
 
     # efficiency predictor
-    if constraint_type == 'flops' or constraint_type == 'latency':
+    if constraint_type == 'flops' or constraint_type == 'latency' or constraint_type == 'annette':
         efficiency_predictor = FLOPsTable(
             device='cuda:0' if cuda_available else 'cpu',
             batch_size=1,
             pred_type=constraint_type,
+            annette_model=annette_model
         )
-    elif constraint_type == 'annette':
-        efficiency_predictor = AnnetteLatencyModel(ofa_network, model=annette_model)
     else:
         raise NotImplementedError
 
@@ -71,7 +70,7 @@ def mobilenet_predictors(population_size, max_time_budget, parent_ratio, constra
 
     evolution_finder = EvolutionFinder(**evolution_parameters)
 
-    return ofa_network, evolution_finder
+    return ofa_network, evolution_finder, efficiency_predictor
 
 
 def resnet_predictors(population_size, max_time_budget, parent_ratio, constraint_type):
@@ -155,10 +154,10 @@ args = parser.parse_args()
 # constrain_type = args.constrain_type
 # annette_model = args.annette_model
 # TODO remove local definitions before committing
-net = 'ResNet50'
-latency_constraints = [12, 10, 11, 13, 8]
+net = 'MobileNetV3'
+latency_constraints = [40, 38, 36, 34, 32, 30, 28, 26, 24, 22, 20]
 constrain_type = 'annette'
-annette_model = 'dnndk-mixed'
+annette_model = 'ncs2-mixed'
 
 parent_folder = 'results/'
 
@@ -192,7 +191,7 @@ N = 250  # How many generations of population to be searched
 r = 0.25  # The ratio of networks that are used as parents for next generation
 
 if net == 'MobileNetV3':
-    ofa_network, evolution_finder = mobilenet_predictors(P, N, r, constrain_type)
+    ofa_network, evolution_finder, efficency_predictor = mobilenet_predictors(P, N, r, constrain_type)
 elif net == 'ResNet50':
     ofa_network, evolution_finder = resnet_predictors(P, N, r, constrain_type)  # TODO here I need to integrate Annette
 else:

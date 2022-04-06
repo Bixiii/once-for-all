@@ -27,9 +27,9 @@ from result_net_configs import *
 csv_fields = [
     'net_config',
     # 'measured_acc',
-    # 'predicted_acc',
-    # 'estimated_flops',
-    # 'estimated_latency',
+    'predicted_acc',
+    'estimated_flops',
+    'estimated_latency',
     'annette_dnndk_mixed',
     # 'flops_pthflops',
     # 'flops_thop',

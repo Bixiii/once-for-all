@@ -8,6 +8,11 @@ from torch.onnx import *
 from ofa.utils import *
 
 
+def export_layer_as_onnx(net, file_name, input_shape):
+    x = torch.randn(*input_shape).cpu()
+    torch.onnx.export(net, x, file_name, export_params=True)
+
+
 def export_as_onnx(net, file_name, image_size=224):
     x = torch.randn(1, 3, image_size, image_size, requires_grad=True).cpu()
     torch.onnx.export(net, x, file_name, export_params=True)
@@ -116,4 +121,4 @@ def count_flops_pthflops(network: torch.nn.Module, input_size: tuple):
 
 def timestamp_string():
     time = datetime.now()
-    return time.strftime('%Y%m%d_%H-%M-%S')
+    return time.strftime('%Y%m%d_%H-%M-%S.%f')
