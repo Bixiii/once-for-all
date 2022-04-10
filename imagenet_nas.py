@@ -10,7 +10,7 @@ import pickle
 
 from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3, OFAResNets
 
-from ofa.nas.efficiency_predictor import AnnetteLatencyModel, AnnetteLatencyModelResNet50
+from ofa.nas.efficiency_predictor import AnnetteLatencyModel, AnnetteLatencyModelResNet50, ResNet50AnnetteLUT
 
 from visualize_subnet import Visualisation
 from utils import architecture_config_2_str, logger, dict_2_str
@@ -116,7 +116,11 @@ def resnet_predictors(population_size, max_time_budget, parent_ratio, constraint
     if constrain_type == 'flops':
         efficiency_predictor = ResNet50FLOPsModel(ofa_network)
     elif constraint_type == 'annette':
-        efficiency_predictor = AnnetteLatencyModelResNet50(ofa_network, annette_model)
+        # efficiency_predictor = AnnetteLatencyModelResNet50(ofa_network, annette_model)
+        look_up_table_path = r'C:\Users\bixi\PycharmProjects\OnceForAllFork\full_restnet_lut.pkl'
+        annette_latency_lut_file = open(look_up_table_path, 'rb')
+        annette_latency_lut = pickle.load(annette_latency_lut_file)
+        efficiency_predictor = ResNet50AnnetteLUT(ofa_network, annette_latency_lut)
     else:
         raise NotImplementedError
 
@@ -154,8 +158,8 @@ args = parser.parse_args()
 # constrain_type = args.constrain_type
 # annette_model = args.annette_model
 # TODO remove local definitions before committing
-net = 'MobileNetV3'
-latency_constraints = [40, 38, 36, 34, 32, 30, 28, 26, 24, 22, 20]
+net = 'ResNet50'
+latency_constraints = [55, 50, 45, 40, 35, 32, 30, 28, 26, 24, 22, 20]
 constrain_type = 'annette'
 annette_model = 'ncs2-mixed'
 
@@ -191,7 +195,7 @@ N = 250  # How many generations of population to be searched
 r = 0.25  # The ratio of networks that are used as parents for next generation
 
 if net == 'MobileNetV3':
-    ofa_network, evolution_finder, efficency_predictor = mobilenet_predictors(P, N, r, constrain_type)
+    ofa_network, evolution_finder, efficiency_predictor = mobilenet_predictors(P, N, r, constrain_type)
 elif net == 'ResNet50':
     ofa_network, evolution_finder = resnet_predictors(P, N, r, constrain_type)  # TODO here I need to integrate Annette
 else:

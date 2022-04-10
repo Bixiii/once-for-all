@@ -338,7 +338,7 @@ class ResNetArchEncoder:
 
         """
         if random.random() < mutate_prob:
-            arch_dict['image_size'] = random.choice(self.image_size_list)
+            arch_dict['image_size'] = random.choice([128, 160, 192, 224])  # TODO revert and make compatible with all image sizes
         return arch_dict
 
     def mutate_arch(self, arch_dict, mutate_prob):

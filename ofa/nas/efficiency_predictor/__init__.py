@@ -59,6 +59,19 @@ class ResNet50FLOPsModel(BaseEfficiencyModel):
         return ResNet50LatencyTable.count_flops_given_config(active_net_config, image_size)
 
 
+class ResNet50AnnetteLUT(BaseEfficiencyModel):
+
+    def __init__(self, ofa_net, loaded_lut):
+        self.ofa_net = ofa_net
+        self.loaded_lut = loaded_lut
+
+    def get_efficiency(self, arch_dict):
+        active_net_config, image_size = self.get_active_subnet_config(arch_dict)
+        arch_dict['image_size'] = image_size
+        latency, _ = self.ofa_net.predict_with_annette_lut(loaded_lut=self.loaded_lut, subnet_config=arch_dict)
+        return latency
+
+
 class ProxylessNASLatencyModel(BaseEfficiencyModel):
 
     def __init__(self, ofa_net, lookup_table_path_dict):
@@ -266,12 +279,14 @@ class AnnetteLatencyLayerPrediction:
         onnx.save(simplified_model, simplified_model_file_name)
 
         onnx_network = ONNXGraph(simplified_model_file_name)
-        if isinstance(network_layer, LinearLayer):
-            annette_graph = onnx_network.onnx_to_annette(simplified_model_file_name, ['input'],
-                                                         name_policy='renumerate')
-        else:
-            annette_graph = onnx_network.onnx_to_annette(simplified_model_file_name, ['input.1'],
-                                                         name_policy='renumerate')
+        # if isinstance(network_layer, LinearLayer):
+        #     annette_graph = onnx_network.onnx_to_annette(simplified_model_file_name, ['input'],
+        #                                                  name_policy='renumerate')
+        # else:
+        #     annette_graph = onnx_network.onnx_to_annette(simplified_model_file_name, ['input.1'],
+        #                                                  name_policy='renumerate')
+        annette_graph = onnx_network.onnx_to_annette(simplified_model_file_name, None,
+                                                     name_policy='renumerate')
         json_file = Path(annette_model_file_name)
         annette_graph.to_json(json_file)
 
@@ -283,7 +298,7 @@ class AnnetteLatencyLayerPrediction:
         # logger.info('Finished ANNETTE efficiency prediction, result <' + str(res[0]) + '>')
 
         os.remove(model_file_name)
-        os.remove(simplified_model_file_name)
+        # os.remove(simplified_model_file_name)
         os.remove(annette_model_file_name)
         return res[0]
 
