@@ -9,7 +9,6 @@ import os
 import pickle
 
 from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3, OFAResNets
-
 from ofa.nas.efficiency_predictor import AnnetteLatencyModel, AnnetteLatencyModelResNet50, ResNet50AnnetteLUT
 
 from visualize_subnet import Visualisation
@@ -97,7 +96,6 @@ def resnet_predictors(population_size, max_time_budget, parent_ratio, constraint
     )
 
     # accuracy predictor (pretrained from OFA repo)
-
     image_size_list = [128, 144, 160, 176, 192, 224, 240, 256]
     arch_encoder = ResNetArchEncoder(
         image_size_list=image_size_list, depth_list=ofa_network.depth_list, expand_list=ofa_network.expand_ratio_list,
@@ -159,7 +157,7 @@ args = parser.parse_args()
 # annette_model = args.annette_model
 # TODO remove local definitions before committing
 net = 'ResNet50'
-latency_constraints = [55, 50, 45, 40, 35, 32, 30, 28, 26, 24, 22, 20]
+latency_constraints = [100]
 constrain_type = 'annette'
 annette_model = 'ncs2-mixed'
 

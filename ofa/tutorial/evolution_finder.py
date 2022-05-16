@@ -3,6 +3,7 @@ import random
 from tqdm import tqdm
 import numpy as np
 from utils import logger
+import time
 
 __all__ = ['EvolutionFinder']
 
@@ -161,6 +162,7 @@ class EvolutionFinder:
 
     def run_evolution_search(self, efficiency_constraint, verbose=False):
         """Run a single roll-out of regularized evolution to a fixed time budget."""
+        print("Start evolution search")
         self.set_efficiency_constraint(efficiency_constraint)
         max_time_budget = self.max_time_budget
         population_size = self.population_size
@@ -190,6 +192,7 @@ class EvolutionFinder:
         # After the population is seeded, proceed with evolving the population.
         for iter in tqdm(range(max_time_budget),
                          desc='Searching with %s constraint (%s)' % (self.constraint_type, self.efficiency_constraint)):
+            start_full_iteration = time.time()
             parents = sorted(population, key=lambda x: x[0])[::-1][:parents_size]
             acc = parents[0][0]
             if verbose:

@@ -6,6 +6,7 @@ import copy
 import random
 import numpy as np
 from tqdm import tqdm
+import time
 
 __all__ = ['EvolutionFinder']
 
@@ -20,7 +21,7 @@ class EvolutionFinder:
         self.arch_mutate_prob = kwargs.get('arch_mutate_prob', 0.1)
         self.resolution_mutate_prob = kwargs.get('resolution_mutate_prob', 0.5)
         self.population_size = kwargs.get('population_size', 100)
-        self.max_time_budget = kwargs.get('max_time_budget', 500)
+        self.max_time_budget = kwargs.get('max_time_budget', 100)
         self.parent_ratio = kwargs.get('parent_ratio', 0.25)
         self.mutation_ratio = kwargs.get('mutation_ratio', 0.5)
 
@@ -39,6 +40,7 @@ class EvolutionFinder:
                 return sample, efficiency
 
     def mutate_sample(self, sample, constraint):
+        start = time.time()
         while True:
             new_sample = copy.deepcopy(sample)
 
@@ -65,6 +67,7 @@ class EvolutionFinder:
 
     def run_evolution_search(self, efficiency_constraint, verbose=False, **kwargs):
         """Run a single roll-out of regularized evolution to a fixed time budget."""
+        print("Start evolution search")
         self.update_hyper_params(kwargs)
 
         mutation_numbers = int(round(self.mutation_ratio * self.population_size))
@@ -75,10 +78,11 @@ class EvolutionFinder:
         child_pool = []
         efficiency_pool = []
         best_info = None
-        if verbose:
-            print('Generate random population...')
+        print('Generate random population...')
+        num_random_sample = 0
         for _ in range(self.population_size):
             sample, efficiency = self.random_valid_sample(efficiency_constraint)
+            num_random_sample = num_random_sample + 1
             child_pool.append(sample)
             efficiency_pool.append(efficiency)
 
@@ -86,12 +90,14 @@ class EvolutionFinder:
         for i in range(self.population_size):
             population.append((accs[i].item(), child_pool[i], efficiency_pool[i]))
 
-        if verbose:
-            print('Start Evolution...')
         # After the population is seeded, proceed with evolving the population.
+
+        num_iteration = 0
         with tqdm(total=self.max_time_budget, desc='Searching with constraint (%s)' % efficiency_constraint,
                   disable=(not verbose)) as t:
             for i in range(self.max_time_budget):
+                num_iteration = num_iteration + 1
+                start_one_iteration = time.time()
                 parents = sorted(population, key=lambda x: x[0])[::-1][:parents_size]
                 acc = parents[0][0]
                 t.set_postfix({
