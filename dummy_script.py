@@ -34,7 +34,7 @@ ofa_network = OFAResNets(
     dataset='imagenet'
 )
 
-image_sizes = [128, 160, 192, 224]  # TODO build single LUT for all resolution - ResNet has more
+image_sizes = [128, 144, 160, 176, 192, 224, 240, 256]
 image_size = 224
 
 # ofa_network.set_active_subnet(d=test_config['d'], e=test_config['e'], w=test_config['w'])
