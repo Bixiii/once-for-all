@@ -72,7 +72,7 @@ def mobilenet_predictors(population_size, max_time_budget, parent_ratio, constra
     return ofa_network, evolution_finder, efficiency_predictor
 
 
-def resnet_predictors(population_size, max_time_budget, parent_ratio, constraint_type):
+def resnet_predictors(population_size, max_time_budget, parent_ratio, constraint_type, annette_hardware_platform):
 
     from ofa.nas.search_algorithm import EvolutionFinder
     from ofa.nas.accuracy_predictor import AccuracyPredictor, ResNetArchEncoder
@@ -114,8 +114,10 @@ def resnet_predictors(population_size, max_time_budget, parent_ratio, constraint
     if constrain_type == 'flops':
         efficiency_predictor = ResNet50FLOPsModel(ofa_network)
     elif constraint_type == 'annette':
-        # efficiency_predictor = AnnetteLatencyModelResNet50(ofa_network, annette_model)
-        look_up_table_path = r'C:\Users\bixi\PycharmProjects\OnceForAllFork\full_restnet_lut.pkl'
+        # TODO option for different hardware platforms of annette
+        # look_up_table_path = r'C:\Users\bixi\PycharmProjects\OnceForAllFork\restnet_dnndk_lut.pkl'
+        look_up_table_path = r'C:\Users\bixi\PycharmProjects\OnceForAllFork\restnet_ncs2_lut.pkl'
+
         annette_latency_lut_file = open(look_up_table_path, 'rb')
         annette_latency_lut = pickle.load(annette_latency_lut_file)
         efficiency_predictor = ResNet50AnnetteLUT(ofa_network, annette_latency_lut)
@@ -157,9 +159,10 @@ args = parser.parse_args()
 # annette_model = args.annette_model
 # TODO remove local definitions before committing
 net = 'ResNet50'
-latency_constraints = [100]
+latency_constraints = [60, 55, 50, 45, 40, 35, 30, 25, 20]
 constrain_type = 'annette'
 annette_model = 'ncs2-mixed'
+# annette_model = 'dnndk-mixed'
 
 parent_folder = 'results/'
 
@@ -195,7 +198,7 @@ r = 0.25  # The ratio of networks that are used as parents for next generation
 if net == 'MobileNetV3':
     ofa_network, evolution_finder, efficiency_predictor = mobilenet_predictors(P, N, r, constrain_type)
 elif net == 'ResNet50':
-    ofa_network, evolution_finder = resnet_predictors(P, N, r, constrain_type)  # TODO here I need to integrate Annette
+    ofa_network, evolution_finder = resnet_predictors(P, N, r, constrain_type, annette_model)
 else:
     raise NotImplementedError
 

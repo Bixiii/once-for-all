@@ -40,7 +40,6 @@ class EvolutionFinder:
                 return sample, efficiency
 
     def mutate_sample(self, sample, constraint):
-        start = time.time()
         while True:
             new_sample = copy.deepcopy(sample)
 

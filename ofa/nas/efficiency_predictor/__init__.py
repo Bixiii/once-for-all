@@ -298,7 +298,7 @@ class AnnetteLatencyLayerPrediction:
         # logger.info('Finished ANNETTE efficiency prediction, result <' + str(res[0]) + '>')
 
         os.remove(model_file_name)
-        # os.remove(simplified_model_file_name)
+        os.remove(simplified_model_file_name)
         os.remove(annette_model_file_name)
         return res[0]
 

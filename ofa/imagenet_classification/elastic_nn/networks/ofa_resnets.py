@@ -313,7 +313,7 @@ class OFAResNets(ResNets):
             subnet.set_bn_param(**self.get_bn_param())
         return latency, subnet
 
-    def build_single_annette_lut(self, image_size=224):
+    def build_single_annette_lut(self, image_size, target_hardware):
         """
         Make latency estimations for all sub-elements of the OFA network and store them in a dict.
         This can be used as look-up-table (lut) to get the latency estimations of a ofa-subnet
@@ -324,15 +324,13 @@ class OFAResNets(ResNets):
 
         """
 
-        # assert (image_size in [128, 160, 192, 224])  # image resolution has to be one of these values
         assert (image_size in [128, 144, 160, 176, 192, 224, 240, 256])  # image resolution has to be one of these values
 
-        annette_latency_predictor = AnnetteLatencyLayerPrediction()
+        annette_latency_predictor = AnnetteLatencyLayerPrediction(model=target_hardware)
 
         ##############
         # input stem #
         ##############
-        # TODO the solution for the input stem is not nice
         input_stem_latency_dict = {}
         depth_config = [2, 2, 2, 2, 2]
         expand_config = [0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35,
@@ -416,19 +414,16 @@ class OFAResNets(ResNets):
 
         return {'input_stem': input_stem_latency_dict, 'blocks': blocks_latency_dict, 'classifier': classifier_latency_dict}
 
-    def build_annette_lut(self, image_sizes=None, save_path='tmp/resnet50_annette_latency_lut.pkl'):
+    def build_annette_lut(self, image_sizes, target_hardware):
         if image_sizes is None:
             image_sizes = [128, 144, 160, 176, 192, 224, 240, 256]
 
         annette_latency_lut = {}
         for image_size in image_sizes:
-            annette_latency_lut_one_resolution = self.build_single_annette_lut(image_size=image_size)
+            annette_latency_lut_one_resolution = self.build_single_annette_lut(image_size, target_hardware)
             annette_latency_lut[image_size] = annette_latency_lut_one_resolution
 
-        # TODO save does not work some missing write attribute bullshit
-        # with open('restnet_lut_res' + str(image_size) + '.pkl', 'wb') as save_file:
-        #     pickle.dump(annette_latency_lut, save_path)
-        #     save_file.close()
+        # TODO save to file
         return annette_latency_lut
 
     def get_active_net_config(self):
