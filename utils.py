@@ -59,6 +59,20 @@ def dict_2_str(dict):
     return string_representation
 
 
+def config_dict_2_file_name(dict):
+    string_representation = ''
+    for [k, v] in dict.items():
+        string_content_value = ''
+        if isinstance(v, list):
+            for value in v:
+                string_content_value = string_content_value + str(value)
+        else:
+            string_content_value = string_content_value + str(v)
+
+        string_representation += str(k) + string_content_value + '_'
+    return string_representation
+
+
 def show_pickle(fig):
     dummy = plt.figure()
     new_manager = dummy.canvas.manager
