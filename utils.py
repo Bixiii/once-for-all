@@ -23,6 +23,9 @@ def export_as_dynamic_onnx(net, file_name, image_size=224):
     torch.onnx.export(net, x, file_name, export_params=True,
                       operator_export_type=OperatorExportTypes.ONNX_ATEN_FALLBACK)
 
+def export_pytorch_state_dict(net, file_name, image_size=224):
+    pass
+
 
 def count_flops(net, input_shape=(3, 32, 32)):
     return {'flops': count_net_flops(net, [1] + list(input_shape)) / 1e6}
@@ -59,18 +62,21 @@ def dict_2_str(dict):
     return string_representation
 
 
-def config_dict_2_file_name(dict):
+# Returns a string representation of a ofa-subnet-configuration without spaces or dots
+def subnet_config_2_file_name(subnet_config):
     string_representation = ''
-    for [k, v] in dict.items():
+    for [k, v] in subnet_config.items():
         string_content_value = ''
         if isinstance(v, list):
             for value in v:
+                if isinstance(value, float):
+                    value = int(value*100)
                 string_content_value = string_content_value + str(value)
         else:
             string_content_value = string_content_value + str(v)
 
         string_representation += str(k) + string_content_value + '_'
-    return string_representation
+    return string_representation[:-1]
 
 
 def show_pickle(fig):

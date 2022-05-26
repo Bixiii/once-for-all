@@ -196,32 +196,32 @@ class AnnetteLatencyModelResNet50(BaseEfficiencyModel):
 
     def predict_efficiency(self, arch_dict):
 
-        logger.debug('Start ANNETTE efficiency prediction')
         # get ANNETTE latency estimation: export as ONNX, load ONNX for ANNETTE, make prediction
-        subnet = self.ofa_net.get_active_subnet(
-            self.ofa_net.set_active_subnet(d=arch_dict['d'], e=arch_dict['e'], w=arch_dict['w']))
+        self.ofa_net.set_active_subnet(d=arch_dict['d'], e=arch_dict['e'], w=arch_dict['w'])
+        subnet = self.ofa_net.get_active_subnet()
 
         model_file_name = './tmp/' + timestamp_string() + '.onnx'
         simplified_model_file_name = './tmp/' + timestamp_string() + 'simplified.onnx'
         annette_model_file_name = './tmp/' + timestamp_string() + '.json'
-        export_as_onnx(subnet, model_file_name)
 
+        # convert to simplified ONNX
+        export_as_onnx(subnet, model_file_name, arch_dict['image_size'])
         onnx_model = onnx.load(model_file_name)
         simplified_model, check = simplify(onnx_model)
         onnx.save(simplified_model, simplified_model_file_name)
 
+        # convert to annette graph
         onnx_network = ONNXGraph(simplified_model_file_name)
         annette_graph = onnx_network.onnx_to_annette(simplified_model_file_name, ['input.1'], name_policy='renumerate')
         json_file = Path(annette_model_file_name)
         annette_graph.to_json(json_file)
-
         model = AnnetteGraph('ofa-net', annette_model_file_name)
 
+        # make latency prediction
         self.opt.run_optimization(model)
         res = self.mod.estimate_model(model)
 
-        # logger.info('Finished ANNETTE efficiency prediction, result <' + str(res[0]) + '>')
-
+        # clean up temporary files
         os.remove(model_file_name)
         os.remove(simplified_model_file_name)
         os.remove(annette_model_file_name)

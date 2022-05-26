@@ -1,10 +1,11 @@
 import csv
+import pickle
 
 from annette import get_database
 from annette.estimation.layer_model import Layer_model
 from annette.estimation.mapping_model import Mapping_model
 
-from ofa.nas.efficiency_predictor import ResNet50FLOPsModel, AnnetteLatencyModel
+from ofa.nas.efficiency_predictor import ResNet50FLOPsModel, AnnetteLatencyModel, ResNet50AnnetteLUT
 from ofa.imagenet_classification.elastic_nn.networks import OFAResNets
 from utils import *
 
@@ -17,6 +18,7 @@ import onnx.utils  # noqa
 import onnx
 from onnxsim import simplify
 from pathlib import Path
+from result_net_configs import resnet50_flop_constrained, resnet50_dnndk_constrained, resnet50_ncs2_constrained
 
 import utils
 
@@ -29,14 +31,20 @@ from ofa.tutorial import FLOPsTable
 " Evaluate subnets (their config has to be given) with different latency estimators and with their predicted accuracy
 """
 
+# Note: Produces correct predictions with most recent version of ANNETTE - tested with reference net
+
+# select evaluation metrics - comment out everything you don't want
+
 csv_fields = [
     'net_config',
-    'estimated_flops',
-    'annette_dnndk_mixed',
+    # 'estimated_flops',
+    'dnndk_mixed',
     'ncs2_mixed',
-    'flops_pthflops',
-    'flops_thop',
-    'flops_pytorch',
+    'dnndk_annette_lut',
+    'ncs2_annette_lut',
+    # 'flops_pthflops',
+    # 'flops_thop',
+    # 'flops_pytorch',
 ]
 
 # # define where the output CSV-file with the results should be stored
@@ -45,10 +53,6 @@ output_file_name = './logs/ofa_resnet_random_subnets_add_info.csv'
 output_file = open(output_file_name, 'w', newline='')
 csv_writer = csv.DictWriter(output_file, fieldnames=csv_fields)
 csv_writer.writeheader()
-
-################################
-# configure evaluation metrics #
-################################
 
 # define parameters for OFA-network ResNet50
 depth_list = [0, 1, 2]
@@ -72,24 +76,24 @@ efficiency_predictor = None
 if 'estimated_flops' in csv_fields:
     efficiency_predictor = ResNet50FLOPsModel(ofa_network)
 
-for _ in range(100):
+for _ in range(10):
     # get a random subnet
-    random_config = ofa_network.sample_active_subnet()
-    random_config['image_size'] = random.choice([128, 160, 192, 224])
-    results = {'net_config': str(random_config)}
+    subnet_config = ofa_network.sample_active_subnet()
+    subnet_config['image_size'] = random.choice([128, 144, 160, 176, 192, 224, 240, 256])
+    results = {'net_config': str(subnet_config)}
 
     # define input size
-    input_size = (1, 3, random_config['image_size'], random_config['image_size'])
+    input_size = (1, 3, subnet_config['image_size'], subnet_config['image_size'])
 
     # predict the flops for the subnet
     if 'estimated_flops' in csv_fields:
-        flops = efficiency_predictor.get_efficiency(random_config)
+        flops = efficiency_predictor.get_efficiency(subnet_config)
         results['estimated_flops'] = flops
 
-    if 'annette_dnndk_mixed' in csv_fields or 'ncs2_mixed' in csv_fields:
+    if 'dnndk_mixed' in csv_fields or 'ncs2_mixed' in csv_fields:
         # get ANNETTE latency estimation: export as ONNX, load ONNX for ANNETTE, make prediction
-        subnet = ofa_network.get_active_subnet(
-            ofa_network.set_active_subnet(d=random_config['d'], e=random_config['e'], w=random_config['w']))
+        ofa_network.set_active_subnet(d=subnet_config['d'], e=subnet_config['e'], w=subnet_config['w'])
+        subnet = ofa_network.get_active_subnet()
 
         model_file_name = 'logs/' + timestamp_string() + '.onnx'
         simplified_model_file_name = 'logs/' + timestamp_string() + 'simplified.onnx'
@@ -107,7 +111,7 @@ for _ in range(100):
 
         model = AnnetteGraph('ofa-net', annette_model_file_name)
 
-        if 'annette_dnndk_mixed' in csv_fields:
+        if 'dnndk_mixed' in csv_fields:
             # load ANNETTE models
             mapping = 'dnndk'
             layer = 'dnndk-mixed'
@@ -117,7 +121,7 @@ for _ in range(100):
             opt.run_optimization(model)
             res = mod.estimate_model(model)
 
-            results['annette_dnndk_mixed'] = res[0]
+            results['dnndk_mixed'] = res[0]
             print('> latency (dnndk-mixed): ', res[0], ' ms')
 
         if 'ncs2_mixed' in csv_fields:
@@ -132,6 +136,27 @@ for _ in range(100):
 
             results['ncs2_mixed'] = res[0]
             print('> latency (ncs2-mixed): ', res[0], ' ms')
+
+    # use look-up-table for annette latency prediction
+    if 'dnndk_annette_lut' in csv_fields:
+        look_up_table_path = 'restnet_dnndk_lut.pkl'
+        annette_latency_lut_file = open(look_up_table_path, 'rb')
+        annette_latency_lut = pickle.load(annette_latency_lut_file)
+        annette_latency_lut_file.close()
+        efficiency_predictor = ResNet50AnnetteLUT(ofa_network, annette_latency_lut)
+        latency, subnet = ofa_network.predict_with_annette_lut(annette_latency_lut, subnet_config, verify=False)
+        results['dnndk_annette_lut'] = latency
+        print('> latency (dnndk_annette_lut): ', latency, ' ms')
+
+    if 'ncs2_annette_lut' in csv_fields:
+        look_up_table_path = r'C:\Users\bixi\PycharmProjects\OnceForAllFork\restnet_ncs2_lut.pkl'
+        annette_latency_lut_file = open(look_up_table_path, 'rb')
+        annette_latency_lut = pickle.load(annette_latency_lut_file)
+        annette_latency_lut_file.close()
+        efficiency_predictor = ResNet50AnnetteLUT(ofa_network, annette_latency_lut)
+        latency, subnet = ofa_network.predict_with_annette_lut(annette_latency_lut, subnet_config, verify=False)
+        results['ncs2_annette_lut'] = latency
+        print('> latency (ncs2_annette_lut): ', latency, ' ms')
 
     # the counted FLOPs vary dependent on which library is used, approximately the are the same
     # count FLOPs with the library pthflops

@@ -45,7 +45,7 @@ output_file = open(output_file_name, 'w', newline='')
 csv_writer = csv.DictWriter(output_file, fieldnames=csv_fields)
 csv_writer.writeheader()
 
-# TODO I think this is not needed - check
+# TODO I think this block is not needed - check
 # set random seed
 random_seed = 1
 random.seed(random_seed)
