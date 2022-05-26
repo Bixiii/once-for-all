@@ -32,8 +32,6 @@ class OFAResNets(ResNets):
         self.width_mult_list.sort()
         self.dataset = dataset
 
-        self.logfile = open('tmp/logging.log', 'w+')
-
         input_channel = [
             make_divisible(64 * width_mult, MyNetwork.CHANNEL_DIVISIBLE) for width_mult in self.width_mult_list
         ]
@@ -287,6 +285,13 @@ class OFAResNets(ResNets):
         """
         self.set_active_subnet(d=subnet_config['d'], e=subnet_config['e'], w=subnet_config['w'])
         latency = 0
+        input_stem = [self.input_stem[0].get_active_subnet(3, False)]
+        if self.input_stem_skipping <= 0:
+            input_stem.append(ResidualBlock(
+                self.input_stem[1].conv.get_active_subnet(self.input_stem[0].active_out_channel, False),
+                IdentityLayer(self.input_stem[0].active_out_channel, self.input_stem[0].active_out_channel)
+            ))
+        input_stem.append(self.input_stem[2].get_active_subnet(self.input_stem[0].active_out_channel, False))
         input_channel = self.input_stem[2].active_out_channel
         latency = latency + loaded_lut[subnet_config['image_size']]['input_stem'][(subnet_config['d'][0], subnet_config['w'][0], subnet_config['w'][0])]
 
@@ -295,20 +300,13 @@ class OFAResNets(ResNets):
             depth_param = self.runtime_depth[stage_id]
             active_idx = block_idx[:len(block_idx) - depth_param]
             for idx in active_idx:
-                # blocks.append(self.blocks[idx].get_active_subnet(input_channel, False))
+                blocks.append(self.blocks[idx].get_active_subnet(input_channel, False))
                 latency = latency + loaded_lut[subnet_config['image_size']]['blocks'][input_channel, self.blocks[idx].active_middle_channels, self.blocks[idx].active_out_channel]
                 input_channel = self.blocks[idx].active_out_channel
+        classifier = self.classifier.get_active_subnet(input_channel, False)
         latency = latency + loaded_lut[subnet_config['image_size']]['classifier'][input_channel]
         subnet = None
         if verify:
-            input_stem = [self.input_stem[0].get_active_subnet(3, False)]
-            if self.input_stem_skipping <= 0:
-                input_stem.append(ResidualBlock(
-                    self.input_stem[1].conv.get_active_subnet(self.input_stem[0].active_out_channel, False),
-                    IdentityLayer(self.input_stem[0].active_out_channel, self.input_stem[0].active_out_channel)
-                ))
-            input_stem.append(self.input_stem[2].get_active_subnet(self.input_stem[0].active_out_channel, False))
-            classifier = self.classifier.get_active_subnet(input_channel, False)
             subnet = ResNets(input_stem, blocks, classifier, max_pooling=self.max_pooling)
             subnet.set_bn_param(**self.get_bn_param())
         return latency, subnet
@@ -353,7 +351,7 @@ class OFAResNets(ResNets):
                         self.input_stem[2].get_active_subnet(self.input_stem[0].active_out_channel, False))
                     input_stem = InputStemLayers(input_stem)
                     input_stem.set_bn_param(**self.get_bn_param())
-                    latency = annette_latency_predictor.predict_efficiency(input_stem, (1, 3, image_size, image_size))
+                    latency = annette_latency_predictor.predict_layer_efficiency(input_stem, (1, 3, image_size, image_size))
 
                     # to select input stem d0, w0 and w1 are needed
                     input_stem_latency_dict[(d0, w0, w1)] = latency
@@ -393,7 +391,7 @@ class OFAResNets(ResNets):
                             if (input_channel, self.blocks[idx].active_middle_channels, self.blocks[idx].active_out_channel) in blocks_latency_dict:
                                 continue
                             # make latency prediction
-                            latency = annette_latency_predictor.predict_efficiency(block, (1, input_channel, resolution, resolution))
+                            latency = annette_latency_predictor.predict_layer_efficiency(block, (1, input_channel, resolution, resolution))
                             blocks_latency_dict[(input_channel, self.blocks[idx].active_middle_channels, self.blocks[idx].active_out_channel)] = latency
 
                         # parameters for next block
@@ -409,7 +407,7 @@ class OFAResNets(ResNets):
         for w in [0, 1, 2]:
             input_channel = self.classifier.in_features_list[w]
             classifier = ResNetClassifier(self.classifier.get_active_subnet(input_channel, False))
-            latency = annette_latency_predictor.predict_efficiency(classifier, (1, input_channel, int(math.ceil(image_size/32)), int(math.ceil(image_size/32))))
+            latency = annette_latency_predictor.predict_layer_efficiency(classifier, (1, input_channel, int(math.ceil(image_size / 32)), int(math.ceil(image_size / 32))))
             classifier_latency_dict[input_channel] = latency
 
         return {'input_stem': input_stem_latency_dict, 'blocks': blocks_latency_dict, 'classifier': classifier_latency_dict}

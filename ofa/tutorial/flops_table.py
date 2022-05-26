@@ -38,7 +38,7 @@ class FLOPsTable:
     def annette_estimate_single_layer_latency(self, layer: nn.Module, input_size: tuple):
         layer.eval()
         rm_bn_from_net(layer)
-        latency = self.annette_predictor.predict_efficiency(layer, input_size)
+        latency = self.annette_predictor.predict_layer_efficiency(layer, input_size)
         return latency
 
     @torch.no_grad()
@@ -160,7 +160,7 @@ class FLOPsTable:
                         elif self.pred_type == 'latency':
                             measure_result = self.measure_single_layer_latency(layer, input_shape)
                         elif self.pred_type == 'annette':
-                            measure_result = self.annette_predictor.predict_efficiency(layer, input_shape)
+                            measure_result = self.annette_predictor.predict_layer_efficiency(layer, input_shape)
                         else:
                             raise NotImplementedError
 
@@ -193,7 +193,7 @@ class FLOPsTable:
                 elif self.pred_type == 'latency':
                     measure_result = self.measure_single_layer_latency(layer, input_shape)
                 elif self.pred_type == 'annette':
-                    measure_result = self.annette_predictor.predict_efficiency(layer, input_shape)
+                    measure_result = self.annette_predictor.predict_layer_efficiency(layer, input_shape)
                 else:
                     raise NotImplementedError
 
@@ -216,7 +216,7 @@ class FLOPsTable:
                 elif self.pred_type == 'latency':
                     measure_result = self.measure_single_layer_latency(layer, input_shape)
                 elif self.pred_type == 'annette':
-                    measure_result = self.annette_predictor.predict_efficiency(layer, input_shape)
+                    measure_result = self.annette_predictor.predict_layer_efficiency(layer, input_shape)
                 else:
                     raise NotImplementedError
 
