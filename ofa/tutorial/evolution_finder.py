@@ -2,6 +2,7 @@ import copy
 import random
 from tqdm import tqdm
 import numpy as np
+from utils import logger
 
 __all__ = ['EvolutionFinder']
 
@@ -27,12 +28,15 @@ class ArchManager:
             e.append(random.choice(self.expand_ratios))
             ks.append(random.choice(self.kernel_sizes))
 
+        img_size = [random.choice(self.resolutions)]
+
         sample = {
             'wid': None,
             'ks': ks,
             'e': e,
             'd': d,
-            'r': [random.choice(self.resolutions)]
+            'r': img_size,
+            'image_size': img_size
         }
 
         return sample
@@ -53,7 +57,9 @@ class ArchManager:
 class EvolutionFinder:
     valid_constraint_range = {
         'flops': [150, 600],
-        'note10': [15, 60],
+        'latency': [1, 10],
+        'note10': [15, 100],
+        'annette': [1, 30]  # TODO difference between dnndk [4,10] and ncs2 [6,26]
     }
 
     def __init__(self, constraint_type, efficiency_constraint,
@@ -74,7 +80,7 @@ class EvolutionFinder:
 
         self.mutate_prob = kwargs.get('mutate_prob', 0.1)
         self.population_size = kwargs.get('population_size', 100)
-        self.max_time_budget = kwargs.get('max_time_budget', 500)
+        self.max_time_budget = kwargs.get('max_time_budget', 500)  # num generations
         self.parent_ratio = kwargs.get('parent_ratio', 0.25)
         self.mutation_ratio = kwargs.get('mutation_ratio', 0.5)
 
@@ -106,13 +112,18 @@ class EvolutionFinder:
     def set_efficiency_constraint(self, new_constraint):
         self.efficiency_constraint = new_constraint
 
+    # TODO
     def random_sample(self):
         constraint = self.efficiency_constraint
+        iteration = 0
         while True:
+            iteration = iteration + 1
             sample = self.arch_manager.random_sample()
             efficiency = self.efficiency_predictor.predict_efficiency(sample)
             if efficiency <= constraint:
                 return sample, efficiency
+            if iteration % 1000 == 0:
+                logger.warning('Could not find suitable sample, in %d iterations.' % iteration)
 
     def mutate_sample(self, sample):
         constraint = self.efficiency_constraint
@@ -161,10 +172,12 @@ class EvolutionFinder:
         child_pool = []
         efficiency_pool = []
         best_info = None
-        if verbose:
-            print('Generate random population...')
-        for _ in range(population_size):
+
+        logger.info('Generate random population...')
+        for iter in tqdm(range(population_size), desc='Search random sample with %s constraint (%s)'
+                                                   % (self.constraint_type, self.efficiency_constraint)):
             sample, efficiency = self.random_sample()
+            logger.info('Found random sample %d' % iter)
             child_pool.append(sample)
             efficiency_pool.append(efficiency)
 
@@ -172,14 +185,15 @@ class EvolutionFinder:
         for i in range(population_size):
             population.append((accs[i].item(), child_pool[i], efficiency_pool[i]))
 
-        if verbose:
-            print('Start Evolution...')
+        logger.info('Start Evolution...')
         # After the population is seeded, proceed with evolving the population.
-        for iter in tqdm(range(max_time_budget), desc='Searching with %s constraint (%s)' % (self.constraint_type, self.efficiency_constraint)):
+        for iter in tqdm(range(max_time_budget),
+                         desc='Searching with %s constraint (%s)' % (self.constraint_type, self.efficiency_constraint)):
             parents = sorted(population, key=lambda x: x[0])[::-1][:parents_size]
             acc = parents[0][0]
             if verbose:
                 print('Iter: {} Acc: {}'.format(iter - 1, parents[0][0]))
+            logger.info('Iter: {} Acc: {} Config: {}'.format(iter - 1, parents[0][0], parents[0][1]))
 
             if acc > best_valids[-1]:
                 best_valids.append(acc)

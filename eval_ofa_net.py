@@ -13,6 +13,7 @@ from ofa.model_zoo import ofa_net
 from ofa.utils import get_net_info
 import csv
 import torch.onnx
+from utils import export_as_onnx
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -58,12 +59,6 @@ elif args.dataset == 'imagenet':
     args.num_classes = 1000
 else:
     raise NotImplementedError
-
-
-def export_as_onnx(net, file_name):
-    x = torch.randn(1, 3, 32, 32, requires_grad=True).cpu()
-    torch.onnx.export(net, x, file_name, export_params=True)
-
 
 if args.gpu == 'all':
     device_list = range(torch.cuda.device_count())

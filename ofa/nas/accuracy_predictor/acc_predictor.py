@@ -39,6 +39,8 @@ class AccuracyPredictor(nn.Module):
             self.load_state_dict(checkpoint)
             self.base_acc = nn.Parameter(checkpoint['base_acc'])
             print('Loaded checkpoint from %s' % checkpoint_path)
+        else:
+            print('WARNING: no accuracy predictor loaded')
 
         self.layers = self.layers.to(self.device)
 
