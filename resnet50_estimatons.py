@@ -98,8 +98,8 @@ for _ in range(10):
         model_file_name = 'logs/' + timestamp_string() + '.onnx'
         simplified_model_file_name = 'logs/' + timestamp_string() + 'simplified.onnx'
         annette_model_file_name = 'logs/' + timestamp_string() + '.json'
-        export_as_onnx(subnet, model_file_name)
 
+        export_as_onnx(subnet, model_file_name, subnet_config['image_size'])
         onnx_model = onnx.load(model_file_name)
         simplified_model, check = simplify(onnx_model)
         onnx.save(simplified_model, simplified_model_file_name)
@@ -144,7 +144,7 @@ for _ in range(10):
         annette_latency_lut = pickle.load(annette_latency_lut_file)
         annette_latency_lut_file.close()
         efficiency_predictor = ResNet50AnnetteLUT(ofa_network, annette_latency_lut)
-        latency, subnet = ofa_network.predict_with_annette_lut(annette_latency_lut, subnet_config, verify=False)
+        latency, _ = ofa_network.predict_with_annette_lut(annette_latency_lut, subnet_config, verify=False)
         results['dnndk_annette_lut'] = latency
         print('> latency (dnndk_annette_lut): ', latency, ' ms')
 
@@ -154,25 +154,28 @@ for _ in range(10):
         annette_latency_lut = pickle.load(annette_latency_lut_file)
         annette_latency_lut_file.close()
         efficiency_predictor = ResNet50AnnetteLUT(ofa_network, annette_latency_lut)
-        latency, subnet = ofa_network.predict_with_annette_lut(annette_latency_lut, subnet_config, verify=False)
+        latency, _ = ofa_network.predict_with_annette_lut(annette_latency_lut, subnet_config, verify=False)
         results['ncs2_annette_lut'] = latency
         print('> latency (ncs2_annette_lut): ', latency, ' ms')
 
     # the counted FLOPs vary dependent on which library is used, approximately the are the same
     # count FLOPs with the library pthflops
     if 'flops_pthflops' in csv_fields:
+        subnet = ofa_network.get_active_subnet()
         flops_pthflops = utils.count_flops_pthflops(subnet, input_size)
         results['flops_pthflops'] = flops_pthflops
         print('> FLOPs (pthflops): ', flops_pthflops, 'MFLOPs')
 
     # count the FLOPs with the library thop
     if 'flops_thop' in csv_fields:
+        subnet = ofa_network.get_active_subnet()
         flops_thop = utils.count_flops_thop(subnet, input_size)
         results['flops_thop'] = flops_thop
         print('> FLOPs (thop): ', flops_thop, 'MFLOPs')
 
     # count the FLOPs with the library pytorch
     if 'flops_pytorch' in csv_fields:
+        subnet = ofa_network.get_active_subnet()
         flops_pytorch = count_net_flops(subnet, input_size) / 1e6
         results['flops_pytorch'] = flops_pytorch
         print('> FLOPs (pytorch_utils): ', flops_pytorch, 'MFLOPs')
