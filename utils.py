@@ -8,6 +8,11 @@ from torch.onnx import *
 from ofa.utils import *
 
 
+def export_layer_as_onnx(net, file_name, input_shape):
+    x = torch.randn(*input_shape).cpu()
+    torch.onnx.export(net, x, file_name, export_params=True)
+
+
 def export_as_onnx(net, file_name, image_size=224):
     x = torch.randn(1, 3, image_size, image_size, requires_grad=True).cpu()
     torch.onnx.export(net, x, file_name, export_params=True)
@@ -17,6 +22,9 @@ def export_as_dynamic_onnx(net, file_name, image_size=224):
     x = torch.randn(1, 3, image_size, image_size, requires_grad=True).cpu()
     torch.onnx.export(net, x, file_name, export_params=True,
                       operator_export_type=OperatorExportTypes.ONNX_ATEN_FALLBACK)
+
+def export_pytorch_state_dict(net, file_name, image_size=224):
+    pass
 
 
 def count_flops(net, input_shape=(3, 32, 32)):
@@ -29,9 +37,10 @@ def project_root():
 
 def architecture_config_2_str(architecture_config):
     config_str = ''
-    config_str = 'ks'
-    for ks in architecture_config['ks']:
-        config_str += str(ks)
+    if 'ks' in architecture_config:
+        config_str = 'ks'
+        for ks in architecture_config['ks']:
+            config_str += str(ks)
     config_str += '-e'
     for e in architecture_config['e']:
         config_str += str(e)
@@ -39,7 +48,8 @@ def architecture_config_2_str(architecture_config):
     for d in architecture_config['d']:
         config_str += str(d)
     if 'r' in architecture_config:
-        config_str += '-r' + str(architecture_config['r'])
+        resolution = architecture_config['r'] if architecture_config['r'] is list else architecture_config['r'][0]
+        config_str += '-r' + str(resolution)
     elif 'image_size' in architecture_config:
         config_str += '-r' + str(architecture_config['image_size'])
     return config_str
@@ -50,6 +60,23 @@ def dict_2_str(dict):
     for [k, v] in dict.items():
         string_representation += str(k) + ': ' + str(v) + '\n'
     return string_representation
+
+
+# Returns a string representation of a ofa-subnet-configuration without spaces or dots
+def subnet_config_2_file_name(subnet_config):
+    string_representation = ''
+    for [k, v] in subnet_config.items():
+        string_content_value = ''
+        if isinstance(v, list):
+            for value in v:
+                if isinstance(value, float):
+                    value = int(value*100)
+                string_content_value = string_content_value + str(value)
+        else:
+            string_content_value = string_content_value + str(v)
+
+        string_representation += str(k) + string_content_value + '_'
+    return string_representation[:-1]
 
 
 def show_pickle(fig):
@@ -110,3 +137,8 @@ def count_flops_pthflops(network: torch.nn.Module, input_size: tuple):
     network = network.to('cuda:0')
     network.eval()
     return count_ops(network, inputs, verbose=False)[0] / 1e6
+
+
+def timestamp_string():
+    time = datetime.now()
+    return time.strftime('%Y%m%d_%H-%M-%S.%f')

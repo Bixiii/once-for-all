@@ -3,7 +3,10 @@ import copy
 import torch
 import torch.nn as nn
 import numpy as np
+
+from ofa.nas.efficiency_predictor import AnnetteLatencyLayerPrediction
 from ofa.utils.layers import *
+import sys
 
 __all__ = ['FLOPsTable']
 
@@ -15,17 +18,28 @@ def rm_bn_from_net(net):
 
 
 class FLOPsTable:
-    def __init__(self, pred_type='flops', device='cuda:0', multiplier=1.2, batch_size=64, load_efficiency_table=None):
-        assert pred_type in ['flops', 'latency']
+    def __init__(self, pred_type='flops', device='cuda:0', multiplier=1.1, batch_size=64, load_efficiency_table=None, annette_model='dnndk-mixed'):
+        self.debug_file = open('tmp/debug_logs.txt', 'w')
+        assert pred_type in ['flops', 'latency', 'annette']
         self.multiplier = multiplier
         self.pred_type = pred_type
         self.device = device
         self.batch_size = batch_size
         self.efficiency_dict = {}
+        if pred_type == 'annette':
+            self.annette_predictor = AnnetteLatencyLayerPrediction(annette_model)
         if load_efficiency_table is not None:
             self.efficiency_dict = np.load(load_efficiency_table, allow_pickle=True).item()
         else:
             self.build_lut(batch_size)
+
+
+    @torch.no_grad()
+    def annette_estimate_single_layer_latency(self, layer: nn.Module, input_size: tuple):
+        layer.eval()
+        rm_bn_from_net(layer)
+        latency = self.annette_predictor.predict_layer_efficiency(layer, input_size)
+        return latency
 
     @torch.no_grad()
     def measure_single_layer_latency(self, layer: nn.Module, input_size: tuple, warmup_steps=10, measure_steps=50):
@@ -61,7 +75,9 @@ class FLOPsTable:
         flops, params = thop.profile(network, (inputs,), verbose=False)
         return flops / 1e6
 
-    def build_lut(self, batch_size=1, resolutions=[160, 176, 192, 208, 224]):
+    def build_lut(self, batch_size=1, resolutions=None):
+        if resolutions is None:
+            resolutions = [160, 176, 192, 208, 224]
         for resolution in resolutions:
             self.build_single_lut(batch_size, resolution)
 
@@ -143,6 +159,10 @@ class FLOPsTable:
                             measure_result = self.measure_single_layer_flops(layer, input_shape) / batch_size
                         elif self.pred_type == 'latency':
                             measure_result = self.measure_single_layer_latency(layer, input_shape)
+                        elif self.pred_type == 'annette':
+                            measure_result = self.annette_predictor.predict_layer_efficiency(layer, input_shape)
+                        else:
+                            raise NotImplementedError
 
                         sub_dict[(ks, e)] = measure_result
 
@@ -172,6 +192,10 @@ class FLOPsTable:
                     measure_result = self.measure_single_layer_flops(layer, input_shape) / batch_size
                 elif self.pred_type == 'latency':
                     measure_result = self.measure_single_layer_latency(layer, input_shape)
+                elif self.pred_type == 'annette':
+                    measure_result = self.annette_predictor.predict_layer_efficiency(layer, input_shape)
+                else:
+                    raise NotImplementedError
 
                 efficiency_dict['other_blocks'][layer_idx] = measure_result
 
@@ -191,6 +215,10 @@ class FLOPsTable:
                     measure_result = self.measure_single_layer_flops(layer, input_shape) / batch_size
                 elif self.pred_type == 'latency':
                     measure_result = self.measure_single_layer_latency(layer, input_shape)
+                elif self.pred_type == 'annette':
+                    measure_result = self.annette_predictor.predict_layer_efficiency(layer, input_shape)
+                else:
+                    raise NotImplementedError
 
                 efficiency_dict['other_blocks'][layer_idx] = measure_result
 

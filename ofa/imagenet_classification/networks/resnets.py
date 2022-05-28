@@ -8,7 +8,6 @@ __all__ = ['ResNets', 'ResNet50', 'ResNet50D']
 
 
 class ResNets(MyNetwork):
-
     BASE_DEPTH_LIST = [2, 2, 4, 2]
     STAGE_WIDTH_LIST = [256, 512, 1024, 2048]
 
@@ -145,7 +144,8 @@ class ResNet50(ResNets):
 
         # build input stem
         input_stem = [ConvLayer(
-            3, input_channel, kernel_size=input_stem_kernel_size, stride=input_stem_stride, use_bn=True, act_func='relu', ops_order='weight_bn_act',
+            3, input_channel, kernel_size=input_stem_kernel_size, stride=input_stem_stride, use_bn=True,
+            act_func='relu', ops_order='weight_bn_act',
         )]
 
         # blocks
@@ -174,6 +174,7 @@ class ResNet50D(ResNets):
     convolutions, and inserts an additional average pooling layer in the residual connection.
     For details see "bag of tricks for image classification with convolutional neural networks".
     """
+
     def __init__(self, n_classes=1000, width_mult=1.0, bn_param=(0.1, 1e-5), dropout_rate=0,
                  expand_ratio=None, depth_param=None):
 
@@ -220,3 +221,54 @@ class ResNet50D(ResNets):
 
         # set bn param
         self.set_bn_param(*bn_param)
+
+
+class InputStemLayers(MyNetwork):
+
+    # BASE_DEPTH_LIST = [2, 2, 4, 2]
+    # STAGE_WIDTH_LIST = [256, 512, 1024, 2048]
+
+    def __init__(self, input_stem):
+        super(InputStemLayers, self).__init__()
+
+        self.input_stem = nn.ModuleList(input_stem)
+        self.max_pooling = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, dilation=1, ceil_mode=False)
+
+    def forward(self, x):
+        for layer in self.input_stem:
+            x = layer(x)
+        x = self.max_pooling(x)
+        return x
+
+
+class ResNetStageLayers(MyNetwork):
+
+    def __init__(self, blocks):
+        super(ResNetStageLayers, self).__init__()
+        self.blocks = nn.ModuleList(blocks)
+
+    def forward(self, x):
+        for block in self.blocks:
+            x = block(x)
+        return x
+
+
+class ResNetBlockLayer(MyNetwork):
+    def __init__(self, blocks):
+        super(ResNetBlockLayer, self).__init__()
+        self.blocks = blocks
+
+    def forward(self, x):
+        return self.blocks(x)
+
+
+class ResNetClassifier(MyNetwork):
+    def __init__(self, classifier):
+        super(ResNetClassifier, self).__init__()
+        self.global_avg_pool = MyGlobalAvgPool2d(keep_dim=False)
+        self.classifier = classifier
+
+    def forward(self, x):
+        x = self.global_avg_pool(x)
+        x = self.classifier(x)
+        return x

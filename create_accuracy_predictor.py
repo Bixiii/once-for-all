@@ -9,6 +9,12 @@ from ofa.nas.accuracy_predictor import *
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
+"""
+" Script for training the accuracy predictor for OFA-network ResNet50
+" First a accuracy dataset is created for training the predictor
+" Note: only tested with CIFAR10 dataset
+"""
+
 parser = argparse.ArgumentParser()
 parser.add_argument(
     '--dataset', type=str, default='imagenet',
@@ -31,19 +37,20 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
+# path where the weights of the trained OFA-network are saved
 if not args.net_path:
     args.net_path = 'exp/exp_OFA' + args.net + '_' + args.dataset + '_' + args.experiment_id \
                     + '/kernel_depth_expand-2-kernel_depth_expand_width/phase2/checkpoint/model_best.pth.tar'
     print('No network path given, try to load network form default location: ', args.net_path)
 
-# dataset parameters
+# select a dataset and define configuration parameters for the dataset
 if args.dataset == 'cifar10':
     args.image_size = 32
     args.image_size_list = [32]
     args.num_classes = 10
     args.acc_dataset_size = 4000
     args.small_input_stem = True
-    # Predictor architecture
+    # define the architecture for the predictor
     num_layers = 1
     num_hidden_units = 100
 else:
@@ -52,11 +59,11 @@ else:
     args.num_classes = 1000
     args.acc_dataset_size = 16000
     args.small_input_stem = False
-    # Predictor architecture
+    # define the architecture for the predictor
     num_layers = 3
     num_hidden_units = 400
 
-# training parameters
+# define training parameters
 batch_size = 100
 n_workers = 0
 args.lr = 1e-3
@@ -67,15 +74,22 @@ if torch.cuda.is_available():
 else:
     raise EnvironmentError('GPU needed')
 
-# OFA parameters
+# define configuration for OFA-network ResNet50
 depth_list = [0, 1, 2]
 expand_ratio_list = [0.2, 0.25, 0.35]
 width_mult_list = [0.65, 0.8, 1.0]
 
+##################################################################################
+# for training the accuracy predictor, a accuracy dataset has to be created
+# the architecture and size of the accuracy predictor is depended on the dataset
+# TODO briefly describe process
+##################################################################################
 
+# define the path where the accuracy dataset should be saved
 args.acc_dataset_folder = 'exp/exp_OFA' + args.net + '_' + args.dataset + '_' + args.experiment_id + '/acc_dataset'
 comment = '_pt_OFA' + args.net + 'AccuracyPredictor_' + args.dataset + '_' + str(args.experiment_id)
 
+# create OFA-network ResNet50
 ofa_network = OFAResNets(
     n_classes=args.num_classes,
     dropout_rate=0,
@@ -86,14 +100,18 @@ ofa_network = OFAResNets(
     dataset=args.dataset
 )
 
+# load the trained weights for the OFA-network
 init = torch.load(args.net_path, map_location='cpu')['state_dict']
 ofa_network.load_state_dict(init)
 ofa_network.to(device)
 
+# load the dataset
 run_config = ImagenetRunConfig(test_batch_size=batch_size, n_worker=n_workers, dataset=args.dataset,
                                data_path=args.data_path)
 run_manager = RunManager('.tmp/eval_subnet', ofa_network, run_config, init=False)
 
+# each parameter of the the architecture configuration is one hot encoded, then all of them are stored in a vector
+# this is the input for the accuracy predictor
 arch_encoder = ResNetArchEncoder(
     image_size_list=args.image_size_list,
     depth_list=depth_list,
@@ -102,22 +120,24 @@ arch_encoder = ResNetArchEncoder(
     small_input_stem=True,
 )
 
+# load the created accuracy dataset
 accuracy_dataset = AccuracyDataset(args.acc_dataset_folder)
 
-# skip creatoin of accuracy dataset if there is already one in the folder
+# skip creation of accuracy dataset if there is already one in the folder
 files = glob.glob(os.path.join(args.acc_dataset_folder, 'src/*'))
 if len(files) < 1:
-    # create accuracy dataset for each image size
+    # for each image resolution a accuracy dataset is create
     accuracy_dataset.build_acc_dataset(run_manager, ofa_network, args.acc_dataset_size, args.image_size_list)
 if not os.path.isfile(os.path.join(args.acc_dataset_folder, 'acc.dict')):
-    # merge accuracy dataset together
+# merge accuracy dataset from different image resolutions togehther
     accuracy_dataset.merge_acc_dataset(args.image_size_list)
 
-# get data loaders for the accuracy dataset
+# create data loaders for the accuracy dataset
 train_data_loader, valid_data_loader, base_acc = accuracy_dataset.build_acc_data_loader(
     arch_encoder=arch_encoder, batch_size=batch_size, n_workers=n_workers
 )
 
+# crate accuracy predictor with the configured architecture
 accuracy_predictor = AccuracyPredictor(
     arch_encoder=arch_encoder,
     hidden_size=num_hidden_units,
@@ -126,11 +146,17 @@ accuracy_predictor = AccuracyPredictor(
 )
 accuracy_predictor = torch.nn.DataParallel(accuracy_predictor)
 
+# define training parameters for the accuracy predictor
 train_criterion = torch.nn.MSELoss()
 test_criterion = torch.nn.L1Loss()
 optimizer = torch.optim.Adam(accuracy_predictor.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.num_epochs)
+# crate a tensorboard writer, to monitor the training process
 tensorboard_writer = SummaryWriter(comment=comment)
+
+############################################
+# train the accuracy predictor and save it #
+############################################
 
 
 def train_one_epoch(epoch):
