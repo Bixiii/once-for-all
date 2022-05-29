@@ -68,13 +68,13 @@ args = parser.parse_args()
 
 # TODO remove before committing - just for current experiment
 args.dataset = 'cifar10'
-args.data_path = r'C:\Users\bixi\PycharmProjects\OnceForAllFork\datasets\cifar10'  # TODO
+args.data_path = r'datasets\cifar10'
 args.net = 'AlexNet'
 args.task = 'basenet'
 args.phase = 1
 args.experiment_id = 'v1'
 
-args.output_folder = 'out/OFA' + args.net + '_' + args.dataset + '_' + args.experiment_id + '/'
+args.output_folder = 'out/OFA-' + args.net + '_' + args.dataset + '_' + args.experiment_id + '/'
 os.makedirs(args.output_folder, exist_ok=True)
 logging.basicConfig(filename=args.output_folder + 'program_flow.log', level=logging.DEBUG,
                     format=('%(asctime)s  '
