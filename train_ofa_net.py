@@ -12,6 +12,7 @@ import torch
 
 from ofa.imagenet_classification.elastic_nn.modules.dynamic_op import DynamicSeparableConv2d
 from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3, OFAResNets
+from ofa.imagenet_classification.networks.alexnet import AlexNet
 from ofa.imagenet_classification.run_manager import ImagenetRunConfig, DistributedImageNetRunConfig
 from ofa.imagenet_classification.networks import MobileNetV3Large, ResNet50
 from ofa.imagenet_classification.run_manager import RunManager, DistributedRunManager
@@ -65,9 +66,16 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-args.experiment_folder = 'exp/exp_OFA' + args.net + '_' + args.dataset + '_' + args.experiment_id + '/'
-os.makedirs(args.experiment_folder, exist_ok=True)
-logging.basicConfig(filename=args.experiment_folder+'program_flow.log', level=logging.DEBUG,
+# TODO remove before committing - just for current experiment
+args.dataset = 'cifar10'
+args.data_path = r'C:\Users\bixi\PycharmProjects\OnceForAllFork\datasets\cifar10'  # TODO
+args.net = 'AlexNet'
+args.task = 'basenet'
+args.phase = 1
+
+args.output_folder = 'out/OFA' + args.net + '_' + args.dataset + '_' + args.experiment_id + '/'
+os.makedirs(args.output_folder, exist_ok=True)
+logging.basicConfig(filename=args.output_folder + 'program_flow.log', level=logging.DEBUG,
                     format=('%(asctime)s  '
                             '%(thread)-10d '
                             '%(levelname)-8s '
@@ -79,10 +87,10 @@ logging.basicConfig(filename=args.experiment_folder+'program_flow.log', level=lo
 logging.info('***Initialized logger***')
 
 if args.net == 'ResNet50' and args.pretrained:
-    raise NotImplementedError
+    raise NotImplementedError  # TODO add this functionality - pretrained weights are available online
 
 # Initialize Horovod
-if use_hvd:
+if use_hvd:  # TODO get that out of config file
     logging.info('Init horovod')
     # os.environ['CUDA_VISIBLE_DEVICES'] = '1,0'
     hvd.init()
@@ -102,9 +110,9 @@ args.image_size = None
 args.width_mult_list = None
 if args.task == 'basenet':
     logging.info('Set parameter for training basenet')
-    args.target_path = args.experiment_folder + 'normal'
+    args.target_path = args.output_folder + 'normal'
     args.dynamic_batch_size = 1
-    args.n_epochs = 450
+    args.n_epochs = 100
     if args.dataset == 'imagenet':
         args.base_lr = 4e-2
     elif args.dataset == 'cifar10':
@@ -121,6 +129,11 @@ if args.task == 'basenet':
         args.width_mult_list = '1.0'
         args.expand_list = '0.35'
         args.depth_list = '2'
+    elif args.net == 'AlexNet':
+        args.ks_list = '5'
+        args.depth_list = '1'
+        args.expand_list = '1'
+
 elif args.task == 'kernel':
     logging.debug('Set parameter for training elastic kernel')
     if args.pretrained:
@@ -135,8 +148,8 @@ elif args.task == 'kernel':
                 model_dir='.torch/ofa_checkpoints/'
             )
     else:
-        args.source_path = args.experiment_folder + 'normal/checkpoint/model_best.pth.tar'
-    args.target_path = args.experiment_folder + 'normal-2-kernel'
+        args.source_path = args.output_folder + 'normal/checkpoint/model_best.pth.tar'
+    args.target_path = args.output_folder + 'normal-2-kernel'
     args.dynamic_batch_size = 1
     args.n_epochs = 120
     args.base_lr = 3e-2
@@ -150,7 +163,7 @@ elif args.task == 'kernel':
         raise NotImplementedError  # kernel stage not applicable for ResNet
 elif args.task == 'depth':
     logging.debug('Set parameter for training elastic depth')
-    args.target_path = args.experiment_folder + 'kernel-2-kernel_depth/phase%d' % args.phase
+    args.target_path = args.output_folder + 'kernel-2-kernel_depth/phase%d' % args.phase
     args.dynamic_batch_size = 2
     if args.phase == 1:
         if args.net == 'MobileNetV3':
@@ -166,9 +179,9 @@ elif args.task == 'depth':
                         model_dir='.torch/ofa_checkpoints/'
                     )
             else:
-                args.source_path = args.experiment_folder + 'normal-2-kernel/checkpoint/model_best.pth.tar'
+                args.source_path = args.output_folder + 'normal-2-kernel/checkpoint/model_best.pth.tar'
         elif args.net == 'ResNet50':
-            args.source_path = args.experiment_folder + 'normal/checkpoint/model_best.pth.tar'
+            args.source_path = args.output_folder + 'normal/checkpoint/model_best.pth.tar'
         args.n_epochs = 25
         args.base_lr = 2.5e-3
         args.warmup_epochs = 0
@@ -195,7 +208,7 @@ elif args.task == 'depth':
                     model_dir='.torch/ofa_checkpoints/'
                 )
         else:
-            args.source_path = args.experiment_folder + 'kernel-2-kernel_depth/phase1/checkpoint/model_best.pth.tar'
+            args.source_path = args.output_folder + 'kernel-2-kernel_depth/phase1/checkpoint/model_best.pth.tar'
         args.n_epochs = 120
         args.base_lr = 7.5e-3
         args.warmup_epochs = 5
@@ -211,7 +224,7 @@ elif args.task == 'depth':
             args.depth_list = '0,1,2'
 elif args.task == 'expand':
     logging.debug('Set parameter for training elastic expand')
-    args.target_path = args.experiment_folder + 'kernel_depth-2-kernel_depth_expand/phase%d' % args.phase
+    args.target_path = args.output_folder + 'kernel_depth-2-kernel_depth_expand/phase%d' % args.phase
     args.dynamic_batch_size = 4
     if args.phase == 1:
         if args.pretrained:
@@ -226,7 +239,7 @@ elif args.task == 'expand':
                     model_dir='.torch/ofa_checkpoints/'
                 )
         else:
-            args.source_path = args.experiment_folder + 'kernel-2-kernel_depth/phase2/checkpoint/model_best.pth.tar'
+            args.source_path = args.output_folder + 'kernel-2-kernel_depth/phase2/checkpoint/model_best.pth.tar'
         args.n_epochs = 25
         args.base_lr = 2.5e-3
         args.warmup_epochs = 0
@@ -240,6 +253,8 @@ elif args.task == 'expand':
             args.width_mult_list = '1.0'
             args.expand_list = '0.25,0.35'
             args.depth_list = '0,1,2'
+        elif args.net == 'AlexNet':
+            raise ValueError('Elastic expand is not available for AlexNet')
     else:
         if args.pretrained:
             if use_hvd:
@@ -253,7 +268,7 @@ elif args.task == 'expand':
                     model_dir='.torch/ofa_checkpoints/'
                 )
         else:
-            args.source_path = args.experiment_folder + 'kernel_depth-2-kernel_depth_expand/phase1/checkpoint/model_best.pth.tar'
+            args.source_path = args.output_folder + 'kernel_depth-2-kernel_depth_expand/phase1/checkpoint/model_best.pth.tar'
         args.n_epochs = 120
         args.base_lr = 7.5e-3
         args.warmup_epochs = 5
@@ -269,13 +284,13 @@ elif args.task == 'expand':
             args.depth_list = '0,1,2'
 elif args.task == 'width':
     logging.debug('Set parameter for training elastic width')
-    args.target_path = args.experiment_folder + 'kernel_depth_expand-2-kernel_depth_expand_width/phase%d' % args.phase
+    args.target_path = args.output_folder + 'kernel_depth_expand-2-kernel_depth_expand_width/phase%d' % args.phase
     args.dynamic_batch_size = 4
     if args.phase == 1:
         if args.pretrained:
             raise NotImplementedError
         else:
-            args.source_path = args.experiment_folder + 'kernel_depth-2-kernel_depth_expand/phase2/checkpoint/model_best.pth.tar'
+            args.source_path = args.output_folder + 'kernel_depth-2-kernel_depth_expand/phase2/checkpoint/model_best.pth.tar'
         args.n_epochs = 25
         args.base_lr = 2.5e-3
         args.warmup_epochs = 0
@@ -290,11 +305,13 @@ elif args.task == 'width':
             args.width_mult_list = '0.8,1.0'
             args.expand_list = '0.20,0.25,0.35'
             args.depth_list = '0,1,2'
+        elif args.net == 'AlexNet':
+            raise ValueError('Elastic width is not supported vor AlexNet')  # TODO this could be done
     else:
         if args.pretrained:
             raise NotImplementedError
         else:
-            args.source_path = args.experiment_folder + 'kernel_depth_expand-2-kernel_depth_expand_width/phase1/checkpoint/model_best.pth.tar'
+            args.source_path = args.output_folder + 'kernel_depth_expand-2-kernel_depth_expand_width/phase1/checkpoint/model_best.pth.tar'
         args.n_epochs = 120
         args.base_lr = 7.5e-3
         args.warmup_epochs = 5
@@ -311,10 +328,9 @@ elif args.task == 'width':
             args.depth_list = '0,1,2'
 else:
     raise NotImplementedError
+
 args.manual_seed = 0
-
 args.lr_schedule_type = 'cosine'
-
 args.base_batch_size = 64
 args.valid_size = None  # 10000 for imagnet
 
@@ -379,7 +395,7 @@ else:
 
 if tiny_gpu:
     logging.info('Use tiny GPU mode')
-    args.image_size = '16'
+    args.image_size = '32'
     args.base_batch_size = 8
 
 if __name__ == '__main__':
@@ -468,6 +484,15 @@ if __name__ == '__main__':
             small_input_stem=small_input_stem,
             dataset=args.dataset
         )
+    elif args.net == 'AlexNet':
+        # TODO make it a OFA net
+        net = AlexNet(
+            n_classes=run_config.data_provider.n_classes,
+            bn_param=(args.bn_momentum, args.bn_eps),
+            dropout_rate=args.dropout,
+            ks_list=args.ks_list,
+            depth_list=args.depth_list,
+        )
 
     # teacher model
     if args.kd_ratio > 0:
@@ -491,6 +516,14 @@ if __name__ == '__main__':
                 expand_ratio=0.35,
                 depth_list=[4, 4, 6, 4],
                 dataset=args.dataset
+            )
+        elif args.net == 'AlexNet':
+            args.teacher_model = AlexNet(
+                n_classes=run_config.data_provider.n_classes,
+                bn_param=(args.bn_momentum, args.bn_eps),
+                dropout_rate=0,
+                ks_list=5,
+                depth_list=1,
             )
         args.teacher_model.cuda()
 
@@ -535,7 +568,7 @@ if __name__ == '__main__':
                 model_dir='.torch/ofa_checkpoints/',
             )
     else:
-        args.teacher_path = args.experiment_folder + 'normal/checkpoint/model_best.pth.tar'
+        args.teacher_path = args.output_folder + 'normal/checkpoint/model_best.pth.tar'
 
     if args.kd_ratio > 0:
         logging.debug('Load teacher model')
