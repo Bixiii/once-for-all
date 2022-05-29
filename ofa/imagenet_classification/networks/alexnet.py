@@ -19,8 +19,8 @@ class AlexNet(MyNetwork):
     def __init__(self, n_classes=10, bn_param=(0.1, 1e-5), dropout_rate=0, depth_list=1, ks_list=3):
         super(AlexNet, self).__init__()
 
-        kernel_size = 5
-        padding = 2
+        kernel_size = 3
+        padding = 1
         self.features = nn.Sequential(
             nn.Conv2d(3, 64, kernel_size=kernel_size, stride=2, padding=padding),
             nn.ReLU(inplace=True),

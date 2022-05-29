@@ -72,6 +72,7 @@ args.data_path = r'C:\Users\bixi\PycharmProjects\OnceForAllFork\datasets\cifar10
 args.net = 'AlexNet'
 args.task = 'basenet'
 args.phase = 1
+args.experiment_id = 'v1'
 
 args.output_folder = 'out/OFA' + args.net + '_' + args.dataset + '_' + args.experiment_id + '/'
 os.makedirs(args.output_folder, exist_ok=True)
