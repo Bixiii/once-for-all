@@ -370,7 +370,7 @@ elif args.dataset == 'cifar10':
     args.no_decay_keys = None
 
 # comment describing current experiment
-comment = '_pt_' + 'OFA' + args.net + '-' + args.task + str(args.phase) + '_' + str(args.image_size) + 'x' + \
+comment = '_pt_' + 'OFA-' + args.net + '-' + args.task + str(args.phase) + '_' + str(args.image_size) + 'x' + \
           str(args.image_size) + '_' + args.dataset + '_bs' + str(args.base_batch_size) + 'lr' + str(args.base_lr) + \
           str(args.experiment_id)
 
