@@ -23,8 +23,9 @@ def export_as_dynamic_onnx(net, file_name, image_size=224):
     torch.onnx.export(net, x, file_name, export_params=True,
                       operator_export_type=OperatorExportTypes.ONNX_ATEN_FALLBACK)
 
+
 def export_pytorch_state_dict(net, file_name, image_size=224):
-    pass
+    raise NotImplementedError
 
 
 def count_flops(net, input_shape=(3, 32, 32)):
@@ -140,5 +141,10 @@ def count_flops_pthflops(network: torch.nn.Module, input_size: tuple):
 
 
 def timestamp_string():
+    time = datetime.now()
+    return time.strftime('%Y%m%d_%H-%M-%S')
+
+
+def timestamp_string_ms():
     time = datetime.now()
     return time.strftime('%Y%m%d_%H-%M-%S.%f')

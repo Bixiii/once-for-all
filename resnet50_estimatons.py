@@ -1,13 +1,15 @@
 import csv
 import pickle
+import random
+import onnx
+from onnxsim import simplify
+from pathlib import Path
 
+# Import ANNETTE functions
 from annette import get_database
 from annette.estimation.layer_model import Layer_model
 from annette.estimation.mapping_model import Mapping_model
-
-from ofa.nas.efficiency_predictor import ResNet50FLOPsModel, AnnetteLatencyModel, ResNet50AnnetteLUT
-from ofa.imagenet_classification.elastic_nn.networks import OFAResNets
-from utils import *
+from annette.graph.graph_util import ONNXGraph, AnnetteGraph
 
 # Import common subpackages so they're available when you 'import onnx'
 import onnx.checker  # noqa
@@ -15,41 +17,47 @@ import onnx.defs  # noqa
 import onnx.helper  # noqa
 import onnx.utils  # noqa
 
-import onnx
-from onnxsim import simplify
-from pathlib import Path
-from result_net_configs import resnet50_flop_constrained, resnet50_dnndk_constrained, resnet50_ncs2_constrained
+# Import OFA functions
+from ofa.nas.efficiency_predictor import ResNet50FLOPsModel, AnnetteLatencyModel, ResNet50AnnetteLUT
+from ofa.imagenet_classification.elastic_nn.networks import OFAResNets
+from ofa.tutorial import FLOPsTable
+from ofa.nas.accuracy_predictor import ResNetArchEncoder, AccuracyPredictor
 
+from utils import *
 import utils
 
-from annette.graph.graph_util import ONNXGraph, AnnetteGraph
-import random
-
-from ofa.tutorial import FLOPsTable
+from result_net_configs import resnet50_flop_constrained, resnet50_dnndk_constrained, resnet50_ncs2_constrained
 
 """
-" Evaluate subnets (their config has to be given) with different latency estimators and with their predicted accuracy
+" Evaluate subnets (their configs given) with different latency estimators and with their predicted accuracy
 """
 
 # Note: Produces correct predictions with most recent version of ANNETTE - tested with reference net
 
-# select evaluation metrics - comment out everything you don't want
+# define where the output with the results should be stored
+output_folder = 'resnet_subnet_metrics/'
+os.makedirs(output_folder, exist_ok=True)
+output_file_name = output_folder + 'metrics_ofa_resnet_subnets' + timestamp_string() + '.csv'
 
+# save onnx files from the estimated networks
+save_onnx_files = True
+save_simplified_onnx_files = True
+
+# select evaluation metrics - comment out everything you don't want
 csv_fields = [
     'net_config',
-    # 'estimated_flops',
-    'dnndk_mixed',
-    'ncs2_mixed',
-    'dnndk_annette_lut',
-    'ncs2_annette_lut',
-    # 'flops_pthflops',
-    # 'flops_thop',
-    # 'flops_pytorch',
+    'estimated_flops',  # flop estimator from the original repository
+    'dnndk_mixed',  # latency estimations for dnndk with ANNETTE (onnx to ANNETTE)
+    'ncs2_mixed',  # latency estimations for ncs2 with ANNETTE (onnx to ANNETTE)
+    'dnndk_annette_lut',  # latency estimations for dnndk with look-up-table created from ANNETTE estimations
+    'ncs2_annette_lut',  # latency estimations for dnndk with look-up-table created from ANNETTE estimations
+    'flops_pthflops',  # flops counted pthfops package
+    'flops_thop',  # flops counted with thop package
+    'flops_pytorch',  # flops counted with pytorch
+    'accuracy',  # estimated accuracy from original repo
 ]
 
-# # define where the output CSV-file with the results should be stored
-output_file_name = './logs/ofa_resnet_random_subnets_add_info.csv'
-# # prepare CSV-file
+# prepare CSV-file
 output_file = open(output_file_name, 'w', newline='')
 csv_writer = csv.DictWriter(output_file, fieldnames=csv_fields)
 csv_writer.writeheader()
@@ -76,7 +84,7 @@ efficiency_predictor = None
 if 'estimated_flops' in csv_fields:
     efficiency_predictor = ResNet50FLOPsModel(ofa_network)
 
-for _ in range(10):
+for _ in range(2):
     # get a random subnet
     subnet_config = ofa_network.sample_active_subnet()
     subnet_config['image_size'] = random.choice([128, 144, 160, 176, 192, 224, 240, 256])
@@ -95,9 +103,9 @@ for _ in range(10):
         ofa_network.set_active_subnet(d=subnet_config['d'], e=subnet_config['e'], w=subnet_config['w'])
         subnet = ofa_network.get_active_subnet()
 
-        model_file_name = 'logs/' + timestamp_string() + '.onnx'
-        simplified_model_file_name = 'logs/' + timestamp_string() + 'simplified.onnx'
-        annette_model_file_name = 'logs/' + timestamp_string() + '.json'
+        model_file_name = 'logs/' + timestamp_string_ms() + '.onnx'
+        simplified_model_file_name = 'logs/' + timestamp_string_ms() + 'simplified.onnx'
+        annette_model_file_name = 'logs/' + timestamp_string_ms() + '.json'
 
         export_as_onnx(subnet, model_file_name, subnet_config['image_size'])
         onnx_model = onnx.load(model_file_name)
@@ -179,6 +187,37 @@ for _ in range(10):
         flops_pytorch = count_net_flops(subnet, input_size) / 1e6
         results['flops_pytorch'] = flops_pytorch
         print('> FLOPs (pytorch_utils): ', flops_pytorch, 'MFLOPs')
+
+    if 'accuracy' in csv_fields:
+        image_size_list = [128, 144, 160, 176, 192, 224, 240, 256]
+        arch_encoder = ResNetArchEncoder(
+            image_size_list=image_size_list, depth_list=ofa_network.depth_list,
+            expand_list=ofa_network.expand_ratio_list,
+            width_mult_list=ofa_network.width_mult_list, base_depth_list=ofa_network.BASE_DEPTH_LIST
+        )
+        accuracy_predictor_checkpoint_path = download_url(
+            'https://hanlab.mit.edu/files/OnceForAll/tutorial/ofa_resnet50_acc_predictor.pth',
+            model_dir='~/.ofa/',
+        )
+        accuracy_predictor = AccuracyPredictor(arch_encoder, 400, 3, checkpoint_path=accuracy_predictor_checkpoint_path,
+                                               device='cpu',
+                                               )
+        accuracy = accuracy_predictor.predict_acc([subnet_config]).item()
+        results['accuracy'] = accuracy
+        print('> Accuracy: ', accuracy, '%')
+
+    if save_simplified_onnx_files or save_onnx_files:
+        ofa_network.set_active_subnet(d=subnet_config['d'], e=subnet_config['e'], w=subnet_config['w'])
+        subnet = ofa_network.get_active_subnet()
+        model_file_name = output_folder + timestamp_string() + '.onnx'
+        simplified_model_file_name = output_folder + timestamp_string() + '_simplified.onnx'
+        export_as_onnx(subnet, model_file_name, subnet_config['image_size'])
+        if save_simplified_onnx_files:
+            onnx_model = onnx.load(model_file_name)
+            simplified_model, check = simplify(onnx_model)
+            onnx.save(simplified_model, simplified_model_file_name)
+        if not save_onnx_files:
+            os.remove(model_file_name)
 
     csv_writer.writerow(results)
     output_file.flush()

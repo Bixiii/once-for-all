@@ -200,9 +200,9 @@ class AnnetteLatencyModelResNet50(BaseEfficiencyModel):
         self.ofa_net.set_active_subnet(d=arch_dict['d'], e=arch_dict['e'], w=arch_dict['w'])
         subnet = self.ofa_net.get_active_subnet()
 
-        model_file_name = './tmp/' + timestamp_string() + '.onnx'
-        simplified_model_file_name = './tmp/' + timestamp_string() + 'simplified.onnx'
-        annette_model_file_name = './tmp/' + timestamp_string() + '.json'
+        model_file_name = './tmp/' + timestamp_string_ms() + '.onnx'
+        simplified_model_file_name = './tmp/' + timestamp_string_ms() + 'simplified.onnx'
+        annette_model_file_name = './tmp/' + timestamp_string_ms() + '.json'
 
         # convert to simplified ONNX
         export_as_onnx(subnet, model_file_name, arch_dict['image_size'])
@@ -269,9 +269,9 @@ class AnnetteLatencyLayerPrediction:
         logger.debug('Start ANNETTE efficiency prediction')
         # get ANNETTE latency estimation: export as ONNX, load ONNX for ANNETTE, make prediction
 
-        model_file_name = './tmp/' + timestamp_string() + '.onnx'
-        simplified_model_file_name = './tmp/' + timestamp_string() + 'simplified.onnx'
-        annette_model_file_name = './tmp/' + timestamp_string() + '.json'
+        model_file_name = './tmp/' + timestamp_string_ms() + '.onnx'
+        simplified_model_file_name = './tmp/' + timestamp_string_ms() + 'simplified.onnx'
+        annette_model_file_name = './tmp/' + timestamp_string_ms() + '.json'
         export_layer_as_onnx(network_layer, model_file_name, input_size)
 
         onnx_model = onnx.load(model_file_name)

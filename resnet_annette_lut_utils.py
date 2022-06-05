@@ -13,7 +13,7 @@ from ofa.imagenet_classification.elastic_nn.networks import OFAResNets, OFAMobil
 import onnx
 
 from ofa.nas.efficiency_predictor import AnnetteLatencyLayerPrediction, AnnetteLatencyModelResNet50
-from utils import timestamp_string, export_as_onnx, architecture_config_2_str, export_layer_as_onnx
+from utils import timestamp_string_ms, export_as_onnx, architecture_config_2_str, export_layer_as_onnx
 from result_net_configs import *
 import pickle
 import random

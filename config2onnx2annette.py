@@ -7,7 +7,7 @@ from annette.estimation.mapping_model import Mapping_model
 from annette.graph import AnnetteGraph
 from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3, OFAResNets
 from result_net_configs import *
-from utils import timestamp_string, export_as_onnx, architecture_config_2_str
+from utils import timestamp_string_ms, export_as_onnx, architecture_config_2_str
 import onnx
 from onnxsim import simplify
 
@@ -87,7 +87,7 @@ def ofa_config_to_onnx(ofa_net_config, net_architecture_name):
     else:
         raise NotImplementedError
 
-    model_file_name = 'logs/' + timestamp_string() + '.onnx'
+    model_file_name = 'logs/' + timestamp_string_ms() + '.onnx'
     simplified_model_file_name = 'logs/' + net_architecture_name + '_' + architecture_config_2_str(ofa_net_config) + '_simplified.onnx'
     export_as_onnx(subnet, model_file_name)
     onnx_model = onnx.load(model_file_name)
