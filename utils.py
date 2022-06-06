@@ -24,6 +24,16 @@ def export_as_dynamic_onnx(net, file_name, image_size=224):
                       operator_export_type=OperatorExportTypes.ONNX_ATEN_FALLBACK)
 
 
+def export_as_simplified_onnx(net, file_name, image_size=224):
+    from onnx import load, save
+    from onnxsim import simplify
+    simplified_model_file_name = file_name[:-5] + '_simplified.onnx'
+    export_as_onnx(net, file_name, image_size)
+    onnx_model = load(file_name)
+    simplified_model, check = simplify(onnx_model)
+    save(simplified_model, simplified_model_file_name)
+
+
 def export_pytorch_state_dict(net, file_name, image_size=224):
     raise NotImplementedError
 
@@ -71,7 +81,7 @@ def subnet_config_2_file_name(subnet_config):
         if isinstance(v, list):
             for value in v:
                 if isinstance(value, float):
-                    value = int(value*100)
+                    value = int(value * 100)
                 string_content_value = string_content_value + str(value)
         else:
             string_content_value = string_content_value + str(v)
@@ -94,7 +104,7 @@ logging.basicConfig(
     format='%(asctime)s %(levelname)7s @:%(pathname)s:%(lineno)d: %(message)s'
 )
 
-# frequently used network configurations
+# frequently used test network configurations
 mbv3_max_config = {
     'ks': [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7],
     'e': [6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6],
@@ -117,6 +127,20 @@ mbv3_random_config = {
     'd': [2, 3, 4, 2, 3],
     'r': [224],
     'image_size': [224]
+}
+
+resnet_max_config = {
+    'd': [2, 2, 2, 2, 2],
+    'e': [0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35],
+    'w': [2, 2, 2, 2, 2, 2],
+    'image_size': 224
+}
+
+resnet_min_config = {
+    'd': [0, 0, 0, 0, 0],
+    'e': [0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20],
+    'w': [0, 0, 0, 0, 0, 0],
+    'image_size': 224
 }
 
 
@@ -147,4 +171,12 @@ def timestamp_string():
 
 def timestamp_string_ms():
     time = datetime.now()
-    return time.strftime('%Y%m%d_%H-%M-%S.%f')
+    return time.strftime('%Y%m%d_%H-%M-%S-%f')
+
+
+def file_id():
+    file_id.id += 1
+    return str(file_id.id).zfill(6)
+
+
+file_id.id = 0
