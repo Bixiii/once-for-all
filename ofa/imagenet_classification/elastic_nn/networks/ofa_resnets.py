@@ -13,6 +13,8 @@ from utils import export_layer_as_onnx
 import pickle
 import math
 import time
+import utils
+import csv
 
 __all__ = ['OFAResNets']
 
@@ -270,46 +272,36 @@ class OFAResNets(ResNets):
         subnet.set_bn_param(**self.get_bn_param())
         return subnet
 
-    def predict_with_annette_lut(self, loaded_lut, subnet_config, verify=False):
+    def predict_with_annette_lut(self, loaded_lut, subnet_config):
         """
         Estimate the annette latency prediction with a look up table
         Also see: build_annette_lut()
 
-        Args:
-            loaded_lut (): path with the saved look-up-table for annette lantency estimations
-            subnet_config (): ofa config for subnet
-            verify (): if true, additionally subnet from given ofa subnet configuration is returned
+        Args: loaded_lut (): path with the saved look-up-table for annette lantency estimations
+        subnet_config (): ofa config for subnet
 
-        Returns: latency prediction, subnet from ofa subnetwork configuration
+        Returns: latency prediction, list of file_ids from which the lut was created (only for debugging purposes)
 
         """
+        layer_files = []
+
         self.set_active_subnet(d=subnet_config['d'], e=subnet_config['e'], w=subnet_config['w'])
         latency = 0
         input_channel = self.input_stem[2].active_out_channel
-        latency = latency + loaded_lut[subnet_config['image_size']]['input_stem'][(subnet_config['d'][0], subnet_config['w'][0], subnet_config['w'][0])]
+        latency = latency + loaded_lut[subnet_config['image_size']]['input_stem'][(subnet_config['d'][0], subnet_config['w'][0], subnet_config['w'][0])]['latency']
+        layer_files.append(loaded_lut[subnet_config['image_size']]['input_stem'][(subnet_config['d'][0], subnet_config['w'][0], subnet_config['w'][0])]['tmp_file'])
 
-        blocks = []
         for stage_id, block_idx in enumerate(self.grouped_block_index):
             depth_param = self.runtime_depth[stage_id]
             active_idx = block_idx[:len(block_idx) - depth_param]
             for idx in active_idx:
-                # blocks.append(self.blocks[idx].get_active_subnet(input_channel, False))
-                latency = latency + loaded_lut[subnet_config['image_size']]['blocks'][input_channel, self.blocks[idx].active_middle_channels, self.blocks[idx].active_out_channel]
+                latency = latency + loaded_lut[subnet_config['image_size']]['blocks'][input_channel, self.blocks[idx].active_middle_channels, self.blocks[idx].active_out_channel]['latency']
+                layer_files.append(loaded_lut[subnet_config['image_size']]['blocks'][input_channel, self.blocks[idx].active_middle_channels, self.blocks[idx].active_out_channel]['tmp_file'])
                 input_channel = self.blocks[idx].active_out_channel
-        latency = latency + loaded_lut[subnet_config['image_size']]['classifier'][input_channel]
-        subnet = None
-        if verify:
-            input_stem = [self.input_stem[0].get_active_subnet(3, False)]
-            if self.input_stem_skipping <= 0:
-                input_stem.append(ResidualBlock(
-                    self.input_stem[1].conv.get_active_subnet(self.input_stem[0].active_out_channel, False),
-                    IdentityLayer(self.input_stem[0].active_out_channel, self.input_stem[0].active_out_channel)
-                ))
-            input_stem.append(self.input_stem[2].get_active_subnet(self.input_stem[0].active_out_channel, False))
-            classifier = self.classifier.get_active_subnet(input_channel, False)
-            subnet = ResNets(input_stem, blocks, classifier, max_pooling=self.max_pooling)
-            subnet.set_bn_param(**self.get_bn_param())
-        return latency, subnet
+
+        latency = latency + loaded_lut[subnet_config['image_size']]['classifier'][input_channel]['latency']
+        layer_files.append(loaded_lut[subnet_config['image_size']]['classifier'][input_channel]['tmp_file'])
+        return latency, layer_files
 
     def build_single_annette_lut(self, image_size, target_hardware):
         """
@@ -324,7 +316,7 @@ class OFAResNets(ResNets):
 
         assert (image_size in [128, 144, 160, 176, 192, 224, 240, 256])  # image resolution has to be one of these values
 
-        annette_latency_predictor = AnnetteLatencyLayerPrediction(model=target_hardware)
+        annette_layer_latency_predictor = AnnetteLatencyLayerPrediction(model=target_hardware)
 
         ##############
         # input stem #
@@ -351,10 +343,13 @@ class OFAResNets(ResNets):
                         self.input_stem[2].get_active_subnet(self.input_stem[0].active_out_channel, False))
                     input_stem = InputStemLayers(input_stem)
                     input_stem.set_bn_param(**self.get_bn_param())
-                    latency = annette_latency_predictor.predict_layer_efficiency(input_stem, (1, 3, image_size, image_size))
 
+                    file_name_id = utils.file_id()
+                    latency = annette_layer_latency_predictor.predict_efficiency(input_stem, (1, 3, image_size, image_size), file_name_id)
                     # to select input stem d0, w0 and w1 are needed
-                    input_stem_latency_dict[(d0, w0, w1)] = latency
+                    lut_key = (d0, w0, w1)
+                    input_stem_latency_dict[lut_key] = {'latency': latency, 'tmp_file': file_name_id}
+
 
         ##########
         # blocks #
@@ -364,7 +359,6 @@ class OFAResNets(ResNets):
         resolution = int(math.ceil(image_size/4))
 
         for stage_id, block_idx in enumerate(self.grouped_block_index):
-            self.logfile.write('predictions for stage_id: ' + str(stage_id) + '\n')
             new_stage = True
 
             # all possible width configurations
@@ -390,9 +384,13 @@ class OFAResNets(ResNets):
                             # skip redundant blocks
                             if (input_channel, self.blocks[idx].active_middle_channels, self.blocks[idx].active_out_channel) in blocks_latency_dict:
                                 continue
+
+                            file_name_id = utils.file_id()
                             # make latency prediction
-                            latency = annette_latency_predictor.predict_layer_efficiency(block, (1, input_channel, resolution, resolution))
-                            blocks_latency_dict[(input_channel, self.blocks[idx].active_middle_channels, self.blocks[idx].active_out_channel)] = latency
+                            latency = annette_layer_latency_predictor.predict_efficiency(block, (1, input_channel, resolution, resolution), file_name_id)
+                            lut_key = (input_channel, self.blocks[idx].active_middle_channels, self.blocks[idx].active_out_channel)
+                            blocks_latency_dict[lut_key] = {'latency': latency, 'tmp_file': file_name_id}
+
 
                         # parameters for next block
                         if down_sample_block and stage_id != 0:
@@ -407,12 +405,15 @@ class OFAResNets(ResNets):
         for w in [0, 1, 2]:
             input_channel = self.classifier.in_features_list[w]
             classifier = ResNetClassifier(self.classifier.get_active_subnet(input_channel, False))
-            latency = annette_latency_predictor.predict_layer_efficiency(classifier, (1, input_channel, int(math.ceil(image_size / 32)), int(math.ceil(image_size / 32))))
-            classifier_latency_dict[input_channel] = latency
+
+            file_name_id = utils.file_id()
+            latency = annette_layer_latency_predictor.predict_efficiency(classifier, (1, input_channel, int(math.ceil(image_size / 32)), int(math.ceil(image_size / 32))), file_name_id)
+            lut_key = input_channel
+            classifier_latency_dict[lut_key] = {'latency': latency, 'tmp_file': file_name_id}
 
         return {'input_stem': input_stem_latency_dict, 'blocks': blocks_latency_dict, 'classifier': classifier_latency_dict}
 
-    def build_annette_lut(self, image_sizes, target_hardware):
+    def build_annette_lut(self, image_sizes, target_hardware, file_name):
         if image_sizes is None:
             image_sizes = [128, 144, 160, 176, 192, 224, 240, 256]
 
@@ -420,8 +421,14 @@ class OFAResNets(ResNets):
         for image_size in image_sizes:
             annette_latency_lut_one_resolution = self.build_single_annette_lut(image_size, target_hardware)
             annette_latency_lut[image_size] = annette_latency_lut_one_resolution
-
         # TODO save to file
+
+        if not file_name:
+            file_name = 'LUT_ofa_resnet_' + target_hardware
+        file = open(file_name + '.pkl', 'wb')
+        pickle.dump(annette_latency_lut, file)
+        file.close()
+        print('Saved the file with the LUT to ' + file_name)
         return annette_latency_lut
 
     def get_active_net_config(self):

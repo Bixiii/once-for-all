@@ -13,7 +13,7 @@ from ofa.imagenet_classification.elastic_nn.networks import OFAResNets, OFAMobil
 import onnx
 
 from ofa.nas.efficiency_predictor import AnnetteLatencyLayerPrediction, AnnetteLatencyModelResNet50
-from utils import timestamp_string_ms, export_as_onnx, architecture_config_2_str, export_layer_as_onnx
+from utils import timestamp_string_ms, export_as_onnx, architecture_config_2_str, export_layer_as_onnx, export_as_simplified_onnx
 from result_net_configs import *
 import pickle
 import random
@@ -31,7 +31,7 @@ width_mult_list = [0.65, 0.8, 1.0]
 img_size_list = []
 small_input_stem = False
 target_hardware = 'dnndk-mixed'
-lut_file_path = 'restnet_dnndk_lut.pkl'
+lut_file_path = r'C:\Users\bixi\PycharmProjects\OnceForAllFork\LUT_ofa_resnet_ncs2-mixed.pkl'
 
 # crate OFA-network ResNet50
 ofa_network = OFAResNets(
@@ -44,7 +44,7 @@ ofa_network = OFAResNets(
     dataset='imagenet'
 )
 
-# # make prediction form ANNETTE-ONNX for a subnet
+# # make prediction form ONNX with ANNETTE for a subnet
 # image_sizes = [128, 144, 160, 176, 192, 224, 240, 256]
 # image_size = 256
 # ofa_network.set_active_subnet(d=test_config['d'], e=test_config['e'], w=test_config['w'])
@@ -53,11 +53,9 @@ ofa_network = OFAResNets(
 # latency_from_onnx = annette_latency_predictor.predict_efficiency(subnet, (1, 3, image_size, image_size))
 
 # # build full ANNETTE LUT
+# annette_model = 'ncs2-mixed'
 # image_sizes = [128, 144, 160, 176, 192, 224, 240, 256]
-# annette_latency_lut_file = open('restnet_ncs2_lut.pkl', 'wb')
-# latency_lut = ofa_network.build_annette_lut(image_sizes, 'ncs2-mixed')
-# pickle.dump(latency_lut, annette_latency_lut_file)
-# annette_latency_lut_file.close()
+# latency_lut = ofa_network.build_annette_lut(image_sizes, annette_model, '')
 
 # # load ANNETTE LUT
 annette_latency_lut_file = open(lut_file_path, 'rb')
@@ -65,13 +63,13 @@ annette_latency_lut = pickle.load(annette_latency_lut_file)
 annette_latency_lut_file.close()
 
 # # make single prediction with ANNETTE LUT
-# start = time.time()
-# subnet_config = ofa_network.sample_active_subnet()
-# image_size = random.choice([128, 144, 160, 176, 192, 224, 240, 256])
-# subnet_config['image_size'] = image_size
-# latency, subnet = ofa_network.predict_with_annette_lut(annette_latency_lut, subnet_config, verify=True)
-# end = time.time()
-# print("Latency is " + str(latency) + ", estimation time was " + str(int((end-start)*1000)) + " ms")
+start = time.time()
+subnet_config = ofa_network.sample_active_subnet()
+image_size = random.choice([128])
+subnet_config['image_size'] = image_size
+latency, layer_files = ofa_network.predict_with_annette_lut(annette_latency_lut, subnet_config)
+end = time.time()
+print("Latency is " + str(latency) + ", estimation time was " + str(int((end-start)*1000)) + " ms")
 
 # # build single resolution ANNETTE LUT
 # image_size = 256
@@ -85,28 +83,29 @@ annette_latency_lut_file.close()
 
 
 # # evaluate ANNETTE LUT
-image_sizes = [128, 144, 160, 176, 192, 224, 240, 256]
-results_csv_file = open('evaluate_annette_lut_resnet50.csv', 'w')
-csv_writer = csv.writer(results_csv_file)
-csv_writer.writerow(['prediction from LUT', 'prediction from ANNETTE'])  # write header
+# image_sizes = [128, 144, 160, 176, 192, 224, 240, 256]
+# results_csv_file = open('evaluate_annette_lut_resnet50.csv', 'w')
+# csv_writer = csv.writer(results_csv_file)
+# csv_writer.writerow(['prediction from LUT', 'prediction from ANNETTE'])  # write header
+#
+# # for subnet_config in resnet50_flop_constrained:
+# for num in range(10):
+#     # get random subnet configuration and resolution
+#     subnet_config = ofa_network.sample_active_subnet()
+#     image_size = random.choice(image_sizes)
+#     subnet_config['image_size'] = image_size
+#
+#     # onnx -> annette -> latency (slow)
+#     annette_latency_predictor = AnnetteLatencyModelResNet50(ofa_net=ofa_network, model=target_hardware)
+#     latency_from_onnx = annette_latency_predictor.predict_efficiency(subnet_config)
+#
+#     # annette look up table (fast)
+#     latency_from_lut, _ = ofa_network.predict_with_annette_lut(annette_latency_lut, subnet_config, verify=False)
+#
+#     # save results to csv file
+#     csv_writer.writerow([latency_from_lut, latency_from_onnx])
+#
+# results_csv_file.close()
 
-# for subnet_config in resnet50_flop_constrained:
-for num in range(10):
-    # get random subnet configuration and resolution
-    subnet_config = ofa_network.sample_active_subnet()
-    image_size = random.choice(image_sizes)
-    subnet_config['image_size'] = image_size
-
-    # onnx -> annette -> latency (slow)
-    annette_latency_predictor = AnnetteLatencyModelResNet50(ofa_net=ofa_network, model=target_hardware)
-    latency_from_onnx = annette_latency_predictor.predict_efficiency(subnet_config)
-
-    # annette look up table (fast)
-    latency_from_lut, _ = ofa_network.predict_with_annette_lut(annette_latency_lut, subnet_config, verify=False)
-
-    # save results to csv file
-    csv_writer.writerow([latency_from_lut, latency_from_onnx])
-
-results_csv_file.close()
 
 

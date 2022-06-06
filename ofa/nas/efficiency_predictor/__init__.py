@@ -264,41 +264,39 @@ class AnnetteLatencyLayerPrediction:
         logger.info('Initialized Annette with layer model <%s> and mapping model <%s>' % (layer, mapping))
         self.debug_file = open('./tmp/debug_prints.txt', 'w')
 
-    def predict_efficiency(self, network_layer, input_size):
+    def predict_efficiency(self, network_layer, input_size, tmp_files_name=''):
 
         logger.debug('Start ANNETTE efficiency prediction')
         # get ANNETTE latency estimation: export as ONNX, load ONNX for ANNETTE, make prediction
 
-        model_file_name = './tmp/' + timestamp_string_ms() + '.onnx'
-        simplified_model_file_name = './tmp/' + timestamp_string_ms() + 'simplified.onnx'
-        annette_model_file_name = './tmp/' + timestamp_string_ms() + '.json'
-        export_layer_as_onnx(network_layer, model_file_name, input_size)
+        if not tmp_files_name:
+            name_id = file_id()
+            model_file_name = './tmp/' + name_id + '.onnx'
+            simplified_model_file_name = './tmp/' + name_id + '_simplified.onnx'
+            annette_model_file_name = './tmp/' + name_id + '.json'
+        else:
+            model_file_name = './tmp/' + tmp_files_name + '.onnx'
+            simplified_model_file_name = './tmp/' + tmp_files_name + '_simplified.onnx'
+            annette_model_file_name = './tmp/' + tmp_files_name + '.json'
 
+        export_layer_as_onnx(network_layer, model_file_name, input_size)
         onnx_model = onnx.load(model_file_name)
         simplified_model, check = simplify(onnx_model)
         onnx.save(simplified_model, simplified_model_file_name)
 
         onnx_network = ONNXGraph(simplified_model_file_name)
-        # if isinstance(network_layer, LinearLayer):
-        #     annette_graph = onnx_network.onnx_to_annette(simplified_model_file_name, ['input'],
-        #                                                  name_policy='renumerate')
-        # else:
-        #     annette_graph = onnx_network.onnx_to_annette(simplified_model_file_name, ['input.1'],
-        #                                                  name_policy='renumerate')
-        annette_graph = onnx_network.onnx_to_annette(simplified_model_file_name, None,
-                                                     name_policy='renumerate')
+        annette_graph = onnx_network.onnx_to_annette(simplified_model_file_name, None, name_policy='renumerate')
         json_file = Path(annette_model_file_name)
         annette_graph.to_json(json_file)
 
         model = AnnetteGraph('ofa-net', annette_model_file_name)
-
         self.opt.run_optimization(model)
         res = self.mod.estimate_model(model)
 
         # logger.info('Finished ANNETTE efficiency prediction, result <' + str(res[0]) + '>')
 
         os.remove(model_file_name)
-        os.remove(simplified_model_file_name)
+        # os.remove(simplified_model_file_name)
         os.remove(annette_model_file_name)
         return res[0]
 
