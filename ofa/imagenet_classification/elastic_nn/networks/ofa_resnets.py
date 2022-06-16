@@ -424,8 +424,8 @@ class OFAResNets(ResNets):
         # TODO save to file
 
         if not file_name:
-            file_name = 'LUT_ofa_resnet_' + target_hardware
-        file = open(file_name + '.pkl', 'wb')
+            file_name = 'LUT_ofa_resnet_' + target_hardware + '.pkl'
+        file = open(file_name, 'wb')
         pickle.dump(annette_latency_lut, file)
         file.close()
         print('Saved the file with the LUT to ' + file_name)
