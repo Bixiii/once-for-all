@@ -29,17 +29,18 @@ csv_fields = [
     # 'measured_acc',
     'predicted_acc',
     'estimated_flops',
-    'estimated_latency',
+    # 'estimated_latency',
     'annette_dnndk_mixed',
-    # 'flops_pthflops',
-    # 'flops_thop',
+    'flops_pthflops',
+    'flops_thop',
     'flops_pytorch',
     'annette_ncs2_mixed',
     'note10',
+    'file_id',
 ]
 
 # define where the output CSV-file with the results should be stored
-output_file_name = './logs/mbv3_flops_over_latencies.csv'
+output_file_name = 'OfaMobileNet_random_subnets.csv'
 # prepare CSV-file
 output_file = open(output_file_name, 'w', newline='')
 csv_writer = csv.DictWriter(output_file, fieldnames=csv_fields)
@@ -191,6 +192,11 @@ for network_config in network_configs:
         loss, (top1, top5) = run_manager.validate(net=ofa_network, data_loader=val_dataset, no_logs=True)
         results['measured_acc'] = top1
         print('> Accuracy on 1k Imagenet Subset: ', top1)
+
+    file_id = utils.file_id()
+    filename = r'mbv3_100_random_subnets/' + file_id + '_simplified.onnx'
+    results['file_id'] = file_id
+    utils.export_as_simplified_onnx(subnet.cpu(), filename, network_config['r'][0])
 
     # write results to CSV-file
     csv_writer.writerow(results)

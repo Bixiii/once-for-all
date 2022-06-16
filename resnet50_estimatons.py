@@ -33,11 +33,12 @@ from result_net_configs import resnet50_flop_constrained, resnet50_dnndk_constra
 """
 
 # Note: Produces correct predictions with most recent version of ANNETTE - tested with reference net
+file_name_prefix = 0
 
 # define where the output with the results should be stored
 output_folder = 'resnet_subnet_metrics/'
 os.makedirs(output_folder, exist_ok=True)
-output_file_name = output_folder + 'metrics_ofa_resnet_subnets' + timestamp_string() + '.csv'
+output_file_name = output_folder + 'metrics_ofa_resnet_subnets_' + timestamp_string() + '.csv'
 
 # save onnx files from the estimated networks
 save_onnx_files = True
@@ -55,6 +56,7 @@ csv_fields = [
     'flops_thop',  # flops counted with thop package
     'flops_pytorch',  # flops counted with pytorch
     'accuracy',  # estimated accuracy from original repo
+    'file_id',
 ]
 
 # prepare CSV-file
@@ -84,9 +86,10 @@ efficiency_predictor = None
 if 'estimated_flops' in csv_fields:
     efficiency_predictor = ResNet50FLOPsModel(ofa_network)
 
-for _ in range(2):
+for _ in range(100):
     # get a random subnet
     subnet_config = ofa_network.sample_active_subnet()
+    subnet = ofa_network.get_active_subnet()
     subnet_config['image_size'] = random.choice([128, 144, 160, 176, 192, 224, 240, 256])
     results = {'net_config': str(subnet_config)}
 
@@ -147,22 +150,22 @@ for _ in range(2):
 
     # use look-up-table for annette latency prediction
     if 'dnndk_annette_lut' in csv_fields:
-        look_up_table_path = 'restnet_dnndk_lut.pkl'
+        look_up_table_path = 'LUT_ofa_resnet_dnndk-mixed.pkl'
         annette_latency_lut_file = open(look_up_table_path, 'rb')
         annette_latency_lut = pickle.load(annette_latency_lut_file)
         annette_latency_lut_file.close()
         efficiency_predictor = ResNet50AnnetteLUT(ofa_network, annette_latency_lut)
-        latency, _ = ofa_network.predict_with_annette_lut(annette_latency_lut, subnet_config, verify=False)
+        latency, _ = ofa_network.predict_with_annette_lut(annette_latency_lut, subnet_config)
         results['dnndk_annette_lut'] = latency
         print('> latency (dnndk_annette_lut): ', latency, ' ms')
 
     if 'ncs2_annette_lut' in csv_fields:
-        look_up_table_path = r'C:\Users\bixi\PycharmProjects\OnceForAllFork\restnet_ncs2_lut.pkl'
+        look_up_table_path = 'LUT_ofa_resnet_ncs2-mixed.pkl'
         annette_latency_lut_file = open(look_up_table_path, 'rb')
         annette_latency_lut = pickle.load(annette_latency_lut_file)
         annette_latency_lut_file.close()
         efficiency_predictor = ResNet50AnnetteLUT(ofa_network, annette_latency_lut)
-        latency, _ = ofa_network.predict_with_annette_lut(annette_latency_lut, subnet_config, verify=False)
+        latency, _ = ofa_network.predict_with_annette_lut(annette_latency_lut, subnet_config)
         results['ncs2_annette_lut'] = latency
         print('> latency (ncs2_annette_lut): ', latency, ' ms')
 
@@ -206,18 +209,10 @@ for _ in range(2):
         results['accuracy'] = accuracy
         print('> Accuracy: ', accuracy, '%')
 
-    if save_simplified_onnx_files or save_onnx_files:
-        ofa_network.set_active_subnet(d=subnet_config['d'], e=subnet_config['e'], w=subnet_config['w'])
-        subnet = ofa_network.get_active_subnet()
-        model_file_name = output_folder + timestamp_string() + '.onnx'
-        simplified_model_file_name = output_folder + timestamp_string() + '_simplified.onnx'
-        export_as_onnx(subnet, model_file_name, subnet_config['image_size'])
-        if save_simplified_onnx_files:
-            onnx_model = onnx.load(model_file_name)
-            simplified_model, check = simplify(onnx_model)
-            onnx.save(simplified_model, simplified_model_file_name)
-        if not save_onnx_files:
-            os.remove(model_file_name)
+    if 'file_id' in csv_fields:
+        file_name_prefix += 1
+        export_as_simplified_onnx(subnet, output_folder + str(file_name_prefix).zfill(6) + '.onnx', subnet_config['image_size'])
+        results['file_id'] = file_name_prefix
 
     csv_writer.writerow(results)
     output_file.flush()
