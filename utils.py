@@ -32,6 +32,8 @@ def export_as_simplified_onnx(net, file_name, image_size=224):
     onnx_model = load(file_name)
     simplified_model, check = simplify(onnx_model)
     save(simplified_model, simplified_model_file_name)
+    print('Saved as: ' + simplified_model_file_name)
+    os.remove(file_name)
 
 
 def export_pytorch_state_dict(net, file_name, image_size=224):
@@ -180,3 +182,12 @@ def file_id():
 
 
 file_id.id = 0
+
+
+def pickle2csv(file_name):
+    import pickle
+    import pandas
+    with open(file_name, 'rb') as file:
+        data = pickle.load(file)
+    data_frame = pandas.DataFrame(data)
+    data_frame.to_csv(file_name[:file_name.find('.')] + '.csv')
