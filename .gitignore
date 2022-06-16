@@ -126,3 +126,4 @@ pretrained
 .tmp
 results
 data
+*.pkl
