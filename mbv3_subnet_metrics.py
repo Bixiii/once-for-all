@@ -3,6 +3,7 @@ import torch
 import random
 import numpy as np
 import csv
+import os
 
 from ofa.imagenet_classification.run_manager import ImagenetRunConfig, RunManager
 from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3
@@ -46,19 +47,11 @@ output_file = open(output_file_name, 'w', newline='')
 csv_writer = csv.DictWriter(output_file, fieldnames=csv_fields)
 csv_writer.writeheader()
 
-# TODO I think this block is not needed - check
-# set random seed
-random_seed = 1
-random.seed(random_seed)
-np.random.seed(random_seed)
-torch.manual_seed(random_seed)
-
 # set device
 cuda_available = torch.cuda.is_available()
 if cuda_available:
     torch.backends.cudnn.enabled = True
     torch.backends.cudnn.benchmark = True
-    torch.cuda.manual_seed(random_seed)
 
 # define OFA network, configuration of adaptive let
 ks_size_list = [3, 5, 7]
@@ -193,8 +186,10 @@ for network_config in network_configs:
         results['measured_acc'] = top1
         print('> Accuracy on 1k Imagenet Subset: ', top1)
 
+    folder_name = r'mbv3_100_random_subnets'
+    os.makedirs(folder_name, exist_ok=True)
     file_id = utils.file_id()
-    filename = r'mbv3_100_random_subnets/' + file_id + '_simplified.onnx'
+    filename = folder_name + '/' + file_id + '_simplified.onnx'
     results['file_id'] = file_id
     utils.export_as_simplified_onnx(subnet.cpu(), filename, network_config['r'][0])
 
