@@ -2,6 +2,7 @@ import os
 import matplotlib.pyplot as plt
 import logging
 from datetime import datetime
+import re
 
 import torch
 from torch.onnx import *
@@ -149,8 +150,7 @@ resnet_min_config = {
 @torch.no_grad()
 def count_flops_thop(network: torch.nn.Module, input_size: tuple):
     import thop
-    inputs = torch.randn(*input_size, device='cuda:0')
-    network = network.to('cuda:0')
+    inputs = torch.randn(*input_size, device='cpu')
     network.eval()
     # rm_bn_from_net(network)
     flops, params = thop.profile(network, (inputs,), verbose=False)
@@ -160,8 +160,7 @@ def count_flops_thop(network: torch.nn.Module, input_size: tuple):
 @torch.no_grad()
 def count_flops_pthflops(network: torch.nn.Module, input_size: tuple):
     from pthflops import count_ops
-    inputs = torch.randn(*input_size, device='cuda:0')
-    network = network.to('cuda:0')
+    inputs = torch.randn(*input_size, device='cpu')
     network.eval()
     return count_ops(network, inputs, verbose=False)[0] / 1e6
 
@@ -191,3 +190,50 @@ def pickle2csv(file_name):
         data = pickle.load(file)
     data_frame = pandas.DataFrame(data)
     data_frame.to_csv(file_name[:file_name.find('.')] + '.csv')
+
+
+def string_2_list(list_as_string):
+    """
+    converts a string representation from a python list to an actual list
+    Args:
+        list_as_string (): string representation with formatting like '[element_1, ..., element_n]'
+
+    Returns: list of strings
+
+    """
+    assert(list_as_string[0] == '[')
+    assert(list_as_string[-1] == ']')
+    new_list = list_as_string[1:-1].split(", ")
+    return new_list
+
+
+def string_2_dict(dict_as_string):
+    assert(dict_as_string[0] == '{')
+    assert(dict_as_string[-1] == '}')
+    new_dict = {}
+    key_pattern = re.compile("\'.+?\'")
+    keys = key_pattern.findall(dict_as_string)
+    value_patter = re.compile("(\: .+?, \')")
+    values = value_patter.findall(dict_as_string)
+    for i, key in enumerate(keys[:-1]):
+        new_dict[key[1:-1]] = values[i][2:-3]
+    last_value = dict_as_string[dict_as_string.rfind("\'")+3:-1]
+    new_dict[keys[-1][1:-1]] = last_value
+    return new_dict
+
+
+def string_2_config_dict(config_dict_as_string):
+    config = string_2_dict(config_dict_as_string)
+    for key, value in config.items():
+        if value[0] == '[':
+            value = string_2_list(value)
+            for i, element in enumerate(value):
+                if '.' in element:
+                    value[i] = float(element)
+                else:
+                    value[i] = int(element)
+        else:
+            value = int(value)
+
+        config[key] = value
+    return config
