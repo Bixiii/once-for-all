@@ -101,11 +101,16 @@ def show_pickle(fig):
 
 
 logger = logging.getLogger(__name__)
+log_directory = os.path.dirname(__file__) + '/logs/'
+os.makedirs(log_directory, exist_ok=True)
+log_file_name = log_directory + datetime.now().strftime('%Y%m%d_%H-%M-%S') + '.log'
+file_handler = logging.FileHandler(log_file_name, mode='w', encoding=None, delay=False)
 logging.basicConfig(
-    filename='logs/' + datetime.now().strftime('%Y%m%d_%H-%M-%S') + '.log',
+    filename=log_file_name,
     level=logging.INFO,
     format='%(asctime)s %(levelname)7s @:%(pathname)s:%(lineno)d: %(message)s'
 )
+
 
 # frequently used test network configurations
 mbv3_max_config = {
