@@ -8,7 +8,9 @@ from pathlib import Path
 import onnx
 from onnxsim import simplify
 
-from annette.graph import ONNXGraph
+from settings import annette_enabled
+if annette_enabled:
+    from annette.graph import ONNXGraph
 
 from generate_annette_format import AnnetteConverter
 from utils import export_as_onnx, architecture_config_2_str
@@ -41,39 +43,43 @@ def ofa_2_onnx_2_annette(sub_net_arch=None, keep_files=False):
     Returns: path to the file containing the ANNETTE format, subnet architecture
 
     '''
-    image_size_list = [128, 160, 192, 224]
-    ofa_net = OFAMobileNetV3(ks_list=[3, 5, 7], depth_list=[2, 3, 4], expand_ratio_list=[3, 4, 6])
-    if sub_net_arch is None:
-        sub_net_arch = ofa_net.sample_active_subnet()
-        sub_net_arch['r'] = random.choice(image_size_list)
-    ofa_net.set_active_subnet(ks=sub_net_arch['ks'], e=sub_net_arch['e'], d=sub_net_arch['d'])
-    sub_net = ofa_net.get_active_subnet()
 
-    config_str = ''
-    if sub_net_arch is not None:
-        config_str = architecture_config_2_str(sub_net_arch)
+    if not annette_enabled:
+        raise Exception('Annette not enabled, check settings.py')
+    else:
+        image_size_list = [128, 160, 192, 224]
+        ofa_net = OFAMobileNetV3(ks_list=[3, 5, 7], depth_list=[2, 3, 4], expand_ratio_list=[3, 4, 6])
+        if sub_net_arch is None:
+            sub_net_arch = ofa_net.sample_active_subnet()
+            sub_net_arch['r'] = random.choice(image_size_list)
+        ofa_net.set_active_subnet(ks=sub_net_arch['ks'], e=sub_net_arch['e'], d=sub_net_arch['d'])
+        sub_net = ofa_net.get_active_subnet()
 
-    file_name = r'./out_data/mbv3_%s.onnx' % config_str
-    file_name_simplified = r'./out_data/mbv3_simplified_%s.onnx' % config_str
-    file_name_annette = r'./out_data/%s-mbv3.json' % config_str
+        config_str = ''
+        if sub_net_arch is not None:
+            config_str = architecture_config_2_str(sub_net_arch)
 
-    export_as_onnx(sub_net, file_name, sub_net_arch['r'])
-    onnx_model = onnx.load(file_name)
-    simplified, check = simplify(onnx_model)
-    onnx.save(simplified, file_name_simplified)
-    onnx_model_simplified = onnx.load(file_name_simplified)
+        file_name = r'./out_data/mbv3_%s.onnx' % config_str
+        file_name_simplified = r'./out_data/mbv3_simplified_%s.onnx' % config_str
+        file_name_annette = r'./out_data/%s-mbv3.json' % config_str
 
-    onnx_network = ONNXGraph(file_name_simplified)
-    annette_graph = onnx_network.onnx_to_annette(file_name_simplified, ['input.1'], verbose=False)
-    annette_graph.to_json(Path(file_name_annette))
+        export_as_onnx(sub_net, file_name, sub_net_arch['r'])
+        onnx_model = onnx.load(file_name)
+        simplified, check = simplify(onnx_model)
+        onnx.save(simplified, file_name_simplified)
+        onnx_model_simplified = onnx.load(file_name_simplified)
 
-    fd = open(file_name_annette)
-    annette_graph_json = json.dumps(json.load(fd), indent=4)
-    fd.close()
-    if not keep_files:
-        os.remove(file_name)
-        os.remove(file_name_simplified)
-    return file_name_annette, sub_net_arch
+        onnx_network = ONNXGraph(file_name_simplified)
+        annette_graph = onnx_network.onnx_to_annette(file_name_simplified, ['input.1'], verbose=False)
+        annette_graph.to_json(Path(file_name_annette))
+
+        fd = open(file_name_annette)
+        annette_graph_json = json.dumps(json.load(fd), indent=4)
+        fd.close()
+        if not keep_files:
+            os.remove(file_name)
+            os.remove(file_name_simplified)
+        return file_name_annette, sub_net_arch
 
 
 def rename_nodes(path_json_net):

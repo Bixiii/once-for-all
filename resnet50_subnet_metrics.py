@@ -6,10 +6,12 @@ from onnxsim import simplify
 from pathlib import Path
 
 # Import ANNETTE functions
-from annette import get_database
-from annette.estimation.layer_model import Layer_model
-from annette.estimation.mapping_model import Mapping_model
-from annette.graph.graph_util import ONNXGraph, AnnetteGraph
+from settings import annette_enabled
+if annette_enabled:
+    from annette import get_database
+    from annette.estimation.layer_model import Layer_model
+    from annette.estimation.mapping_model import Mapping_model
+    from annette.graph.graph_util import ONNXGraph, AnnetteGraph
 
 # Import common subpackages so they're available when you 'import onnx'
 import onnx.checker  # noqa
@@ -20,13 +22,10 @@ import onnx.utils  # noqa
 # Import OFA functions
 from ofa.nas.efficiency_predictor import ResNet50FLOPsModel, AnnetteLatencyModel, ResNet50AnnetteLUT
 from ofa.imagenet_classification.elastic_nn.networks import OFAResNets
-from ofa.tutorial import FLOPsTable
 from ofa.nas.accuracy_predictor import ResNetArchEncoder, AccuracyPredictor
 
 from utils import *
 import utils
-
-from result_net_configs import resnet50_flop_constrained, resnet50_dnndk_constrained, resnet50_ncs2_constrained
 
 """
 " Evaluate subnets (their configs given) with different latency estimators and with their predicted accuracy
@@ -101,52 +100,55 @@ for _ in range(100):
         flops = efficiency_predictor.get_efficiency(subnet_config)
         results['estimated_flops'] = flops
 
-    if 'dnndk_mixed' in csv_fields or 'ncs2_mixed' in csv_fields:
-        # get ANNETTE latency estimation: export as ONNX, load ONNX for ANNETTE, make prediction
-        ofa_network.set_active_subnet(d=subnet_config['d'], e=subnet_config['e'], w=subnet_config['w'])
-        subnet = ofa_network.get_active_subnet()
+    if not annette_enabled:
+        raise Exception('Annette not enabled, check settings.py')
+    else:
+        if ('dnndk_mixed' in csv_fields or 'ncs2_mixed' in csv_fields):
+            # get ANNETTE latency estimation: export as ONNX, load ONNX for ANNETTE, make prediction
+            ofa_network.set_active_subnet(d=subnet_config['d'], e=subnet_config['e'], w=subnet_config['w'])
+            subnet = ofa_network.get_active_subnet()
 
-        model_file_name = 'logs/' + timestamp_string_ms() + '.onnx'
-        simplified_model_file_name = 'logs/' + timestamp_string_ms() + 'simplified.onnx'
-        annette_model_file_name = 'logs/' + timestamp_string_ms() + '.json'
+            model_file_name = 'logs/' + timestamp_string_ms() + '.onnx'
+            simplified_model_file_name = 'logs/' + timestamp_string_ms() + 'simplified.onnx'
+            annette_model_file_name = 'logs/' + timestamp_string_ms() + '.json'
 
-        export_as_onnx(subnet, model_file_name, subnet_config['image_size'])
-        onnx_model = onnx.load(model_file_name)
-        simplified_model, check = simplify(onnx_model)
-        onnx.save(simplified_model, simplified_model_file_name)
+            export_as_onnx(subnet, model_file_name, subnet_config['image_size'])
+            onnx_model = onnx.load(model_file_name)
+            simplified_model, check = simplify(onnx_model)
+            onnx.save(simplified_model, simplified_model_file_name)
 
-        onnx_network = ONNXGraph(simplified_model_file_name)
-        annette_graph = onnx_network.onnx_to_annette(simplified_model_file_name, ['input.1'], name_policy='renumerate')
-        json_file = Path(annette_model_file_name)
-        annette_graph.to_json(json_file)
+            onnx_network = ONNXGraph(simplified_model_file_name)
+            annette_graph = onnx_network.onnx_to_annette(simplified_model_file_name, ['input.1'], name_policy='renumerate')
+            json_file = Path(annette_model_file_name)
+            annette_graph.to_json(json_file)
 
-        model = AnnetteGraph('ofa-net', annette_model_file_name)
+            model = AnnetteGraph('ofa-net', annette_model_file_name)
 
-        if 'dnndk_mixed' in csv_fields:
-            # load ANNETTE models
-            mapping = 'dnndk'
-            layer = 'dnndk-mixed'
-            opt = Mapping_model.from_json(get_database('models', 'mapping', mapping + '.json'))
-            mod = Layer_model.from_json(get_database('models', 'layer', layer + '.json'))
+            if 'dnndk_mixed' in csv_fields:
+                # load ANNETTE models
+                mapping = 'dnndk'
+                layer = 'dnndk-mixed'
+                opt = Mapping_model.from_json(get_database('models', 'mapping', mapping + '.json'))
+                mod = Layer_model.from_json(get_database('models', 'layer', layer + '.json'))
 
-            opt.run_optimization(model)
-            res = mod.estimate_model(model)
+                opt.run_optimization(model)
+                res = mod.estimate_model(model)
 
-            results['dnndk_mixed'] = res[0]
-            print('> latency (dnndk-mixed): ', res[0], ' ms')
+                results['dnndk_mixed'] = res[0]
+                print('> latency (dnndk-mixed): ', res[0], ' ms')
 
-        if 'ncs2_mixed' in csv_fields:
-            # load ANNETTE models
-            mapping = 'ov2'
-            layer = 'ncs2-mixed'
-            opt = Mapping_model.from_json(get_database('models', 'mapping', mapping + '.json'))
-            mod = Layer_model.from_json(get_database('models', 'layer', layer + '.json'))
+            if 'ncs2_mixed' in csv_fields:
+                # load ANNETTE models
+                mapping = 'ov2'
+                layer = 'ncs2-mixed'
+                opt = Mapping_model.from_json(get_database('models', 'mapping', mapping + '.json'))
+                mod = Layer_model.from_json(get_database('models', 'layer', layer + '.json'))
 
-            opt.run_optimization(model)
-            res = mod.estimate_model(model)
+                opt.run_optimization(model)
+                res = mod.estimate_model(model)
 
-            results['ncs2_mixed'] = res[0]
-            print('> latency (ncs2-mixed): ', res[0], ' ms')
+                results['ncs2_mixed'] = res[0]
+                print('> latency (ncs2-mixed): ', res[0], ' ms')
 
     # use look-up-table for annette latency prediction
     if 'dnndk_annette_lut' in csv_fields:
