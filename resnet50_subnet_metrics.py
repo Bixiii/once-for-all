@@ -85,9 +85,13 @@ efficiency_predictor = None
 if 'estimated_flops' in csv_fields:
     efficiency_predictor = ResNet50FLOPsModel(ofa_network)
 
+# crate list of subnets which should be measured
+subnet_configs = []
 for _ in range(100):
-    # get a random subnet
-    subnet_config = ofa_network.sample_active_subnet()
+    subnet_configs.append(ofa_network.sample_active_subnet())
+
+for subnet_config in subnet_configs:
+    ofa_network.set_active_subnet(d=subnet_config['d'], e=subnet_config['e'], w=subnet_config['w'])
     subnet = ofa_network.get_active_subnet()
     subnet_config['image_size'] = random.choice([128, 144, 160, 176, 192, 224, 240, 256])
     results = {'net_config': str(subnet_config)}
