@@ -3,7 +3,7 @@
 " The generated subnets were optimized for different metrics
 """
 
-latency_constrained = [
+mbv3_latency_constrained = [
     {'wid': None, 'ks': [5, 7, 7, 3, 5, 7, 7, 5, 7, 7, 5, 7, 5, 5, 5, 3, 5, 7, 5, 3],
      'e': [4, 4, 4, 4, 6, 4, 4, 6, 6, 6, 6, 4, 6, 6, 4, 4, 6, 6, 6, 3], 'd': [4, 4, 4, 4, 4], 'r': [224],
      'image_size': [224]},
@@ -30,7 +30,7 @@ latency_constrained = [
      'image_size': [224]},
 ]
 
-flop_constrained = [
+mbv3_flop_constrained = [
     {'wid': None, 'ks': [3, 3, 3, 5, 3, 5, 7, 3, 7, 7, 3, 7, 7, 7, 7, 5, 3, 5, 5, 5],
      'e': [4, 3, 6, 3, 6, 6, 4, 6, 4, 3, 6, 6, 3, 6, 6, 6, 6, 6, 6, 6], 'd': [4, 4, 4, 4, 4], 'r': [224],
      'image_size': [224]},
@@ -66,7 +66,7 @@ flop_constrained = [
      'image_size': [160]},
 ]
 
-annette_dnndk_mixed_constrained = [
+mbv3_annette_dnndk_mixed_constrained = [
     {'wid': None, 'ks': [5, 5, 5, 5, 7, 3, 7, 3, 5, 7, 5, 7, 7, 5, 5, 3, 7, 7, 5, 5],
      'e': [4, 3, 6, 3, 6, 6, 4, 6, 4, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 4], 'd': [4, 4, 4, 4, 4], 'r': [224],
      'image_size': [224]},
@@ -102,7 +102,7 @@ annette_dnndk_mixed_constrained = [
      'image_size': [208]},
 ]
 
-annette_ncs2_mixed_constrained = [
+mnv3_annette_ncs2_mixed_constrained = [
     {'wid': None, 'ks': [7, 5, 7, 3, 7, 3, 7, 7, 7, 5, 7, 7, 5, 5, 7, 3, 5, 7, 7, 5],
      'e': [4, 4, 3, 4, 6, 6, 4, 6, 6, 6, 6, 3, 6, 6, 6, 6, 6, 6, 6, 4], 'd': [3, 4, 4, 4, 4], 'r': [208],
      'image_size': [208]},
@@ -138,7 +138,7 @@ annette_ncs2_mixed_constrained = [
      'image_size': [160]},
 ]
 
-note10_constrained = [
+mbv3_note10_constrained = [
     {'wid': None, 'ks': [5, 5, 5, 5, 7, 3, 7, 3, 5, 7, 5, 7, 7, 5, 5, 3, 7, 7, 5, 5],
      'e': [4, 3, 6, 3, 6, 6, 4, 6, 4, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 4], 'd': [4, 4, 4, 4, 4], 'r': [224],
      'image_size': [224]},
