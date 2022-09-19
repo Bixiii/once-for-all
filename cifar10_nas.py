@@ -14,14 +14,14 @@ from utils import export_as_onnx
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--net', default='ResNet50', choices=['ResNet50', 'MobileNetV3'])
-parser.add_argument('--dataset', default='cifar10', choices=['cifar10', 'imagenet'])
+parser.add_argument('--dataset', default='cifar10', choices=['cifar10'])
 parser.add_argument('--accuracy_predictor_path', default=None, help='Path to the trained accuracy predictor')
 args = parser.parse_args()
 
-# My local variables, because I don't want to set the paramters all the time <- delete them
+# TODO local definitions (need to be removed when using command line arguments)
 args.accuracy_predictor_path = r'C:\Users\bixi\PycharmProjects\OnceForAllFork\exp\exp_OFAResNet50_cifar10_exp-0.0.2\accuracy_predictor\acc_predictor_model_best.pth.tar'
 args.net = 'MobileNetV3'
-args.dataset = 'imagenet'
+args.dataset = 'cifar10'
 
 if not args.accuracy_predictor_path:
     raise FileExistsError('You need to specify the path to the trained accuracy predictor model.')
@@ -46,7 +46,7 @@ if args.net == 'ResNet50':
     args.depth_list = [0, 1, 2]
     args.expand_list = [0.2, 0.25, 0.35]
     args.width_mult_list = [0.65, 0.8, 1.0]
-    args.small_input_stem = True if args.dataset == 'cifar10' else False
+    args.small_input_stem = True
 elif args.net == 'MobileNetV3':
     args.ks_list = [3, 5, 7]
     args.depth_list = [2, 3, 4]
@@ -60,9 +60,6 @@ else:
 if args.dataset == 'cifar10':
     args.image_size_list = [32]
     args.num_classes = 10
-elif args.dataset == 'imagenet':
-    args.image_size_list = [224]
-    args.num_classes = 1000
 else:
     raise NotImplementedError
 
