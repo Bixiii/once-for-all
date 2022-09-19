@@ -21,7 +21,6 @@ NAS for Imagenet using pretrained networks from OnceForAll publication
 
 
 def mobilenet_predictors(population_size, max_time_budget, parent_ratio, constraint_type):
-
     from ofa.tutorial import EvolutionFinder
     from ofa.tutorial import AccuracyPredictor, LatencyTable, FLOPsTable
 
@@ -73,7 +72,6 @@ def mobilenet_predictors(population_size, max_time_budget, parent_ratio, constra
 
 
 def resnet_predictors(population_size, max_time_budget, parent_ratio, constraint_type, annette_hardware_platform):
-
     from ofa.nas.search_algorithm import EvolutionFinder
     from ofa.nas.accuracy_predictor import AccuracyPredictor, ResNetArchEncoder
     from ofa.nas.efficiency_predictor import ResNet50FLOPsModel
@@ -157,17 +155,21 @@ args = parser.parse_args()
 # latency_constraints = args.latency
 # constrain_type = args.constrain_type
 # annette_model = args.annette_model
-# TODO remove local definitions before committing
-net = 'ResNet50'
-latency_constraints = [60, 55, 50, 45, 40, 35, 30, 25, 20]
-constrain_type = 'annette'
-annette_model = 'ncs2-mixed'
+# TODO local definitions (need to be removed when using command line arguments)
+net = 'MobileNetV3'
+latency_constraints = [150]
+constrain_type = 'flops'
+annette_model = 'ncs2-mixed' # won't be used if another constrain is selected
 # annette_model = 'dnndk-mixed'
+include_pruning_statistics = False
 
 parent_folder = 'results/'
 
 # set random seed
-random_seed = 1
+import time
+from datetime import datetime
+
+random_seed = int(datetime.now().timestamp())
 random.seed(random_seed)
 np.random.seed(random_seed)
 torch.manual_seed(random_seed)
@@ -184,8 +186,24 @@ results_file_name = parent_folder + constrain_type + '_optimized_' + net + '_sub
 print('File with results from NAS created <' + results_file_name + '>.')
 write_header = False if os.path.exists(results_file_name) else True
 output_file = open(results_file_name, 'a+', newline='')
-csv_data_fields = ['constrain_type', 'target_hardware', 'latency_constraint', 'estimated_latency', 'calculation_time',
-                   'top1_acc', 'net_config']
+
+csv_data_fields = [
+    'constrain_type',
+    'target_hardware',
+    'latency_constraint',
+    'estimated_latency',
+    'calculation_time',
+    'top1_acc',
+    'net_config',
+]
+
+if include_pruning_statistics:
+    csv_data_fields.extend([
+        'percent_layers_pruned',
+        'percent_kernel_pruned',
+        'percent_channel_pruned'
+    ])
+
 csv_writer = csv.DictWriter(output_file, fieldnames=csv_data_fields)
 if write_header:
     csv_writer.writeheader()
@@ -206,7 +224,6 @@ if not isinstance(latency_constraints, list):
     latency_constraints = [latency_constraints]
 
 for latency_constraint in latency_constraints:
-
     # find optimal subnet
     start = time.time()
     logger.info('Start evolution search')
@@ -227,29 +244,38 @@ for latency_constraint in latency_constraints:
     print(info_string)
 
     # result to csv file
-    csv_writer.writerow(
-        {'constrain_type': constrain_type,
-         'target_hardware': annette_model,
-         'latency_constraint': latency_constraint,
-         'estimated_latency': estimated_latency,
-         'calculation_time': end - start,
-         'top1_acc': predicted_accuracy,
-         'net_config': str(subnet_config)
-         })
-    output_file.flush()
 
     # visualize subnet config
-    # drawing = Visualisation()
-    # title = (('Constrain: %.2f %s \nAccuracy: %.2f' % (
-    #     estimated_latency, 'MFLOPs' if constrain_type == 'flops' else 'ms', predicted_accuracy * 100)) + '%')
-    #
+    drawing = Visualisation()
+    title = (('Constrain: %.2f %s \nAccuracy: %.2f' % (
+        estimated_latency, 'MFLOPs' if constrain_type == 'flops' else 'ms', predicted_accuracy * 100)) + '%')
+
     # fig = drawing.mbv3_barchart(subnet_config,
     #                             save_path=parent_folder + (architecture_config_2_str(subnet_config) + '.png'),
     #                             title=title, show_fixed=True, relative=False, show=False)
     # pickle.dump(fig, open(parent_folder + architecture_config_2_str(subnet_config) + '.pickle', 'wb'))
     #
-    # fig_rel = drawing.mbv3_barchart(subnet_config,
-    #                                 save_path=parent_folder + (
-    #                                             architecture_config_2_str(subnet_config) + '_relative.png'),
-    #                                 title=title, show_fixed=True, relative=True, show=True)
+    fig_rel, prune_statistics = drawing.mbv3_barchart(subnet_config,
+                                                      save_path=parent_folder + (
+                                                              architecture_config_2_str(
+                                                                  subnet_config) + '_relative.png'),
+                                                      title=title, show_fixed=True, relative=True, show=True)
     # pickle.dump(fig_rel, open(parent_folder + architecture_config_2_str(subnet_config) + '_relative.pickle', 'wb'))
+
+    csv_data = {'constrain_type': constrain_type,
+                'target_hardware': annette_model,
+                'latency_constraint': latency_constraint,
+                'estimated_latency': estimated_latency,
+                'calculation_time': end - start,
+                'top1_acc': predicted_accuracy,
+                'net_config': str(subnet_config),
+                }
+
+    if include_pruning_statistics:
+        csv_data['percent_layers_pruned'] = str(prune_statistics['layer'])
+        csv_data['percent_kernel_pruned'] = str(prune_statistics['kernel'])
+        csv_data['percent_channel_pruned'] = str(prune_statistics['channel'])
+
+    csv_writer.writerow(csv_data)
+
+    output_file.flush()
