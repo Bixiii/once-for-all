@@ -3,6 +3,7 @@ import torch
 import random
 import numpy as np
 import csv
+import os
 
 from ofa.imagenet_classification.run_manager import ImagenetRunConfig, RunManager
 from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3
@@ -29,35 +30,28 @@ csv_fields = [
     # 'measured_acc',
     'predicted_acc',
     'estimated_flops',
-    'estimated_latency',
+    # 'estimated_latency',
     'annette_dnndk_mixed',
-    # 'flops_pthflops',
-    # 'flops_thop',
+    'flops_pthflops',
+    'flops_thop',
     'flops_pytorch',
     'annette_ncs2_mixed',
     'note10',
+    'file_id',
 ]
 
 # define where the output CSV-file with the results should be stored
-output_file_name = './logs/mbv3_flops_over_latencies.csv'
+output_file_name = 'OfaMobileNet_random_subnets.csv'
 # prepare CSV-file
 output_file = open(output_file_name, 'w', newline='')
 csv_writer = csv.DictWriter(output_file, fieldnames=csv_fields)
 csv_writer.writeheader()
-
-# TODO I think this block is not needed - check
-# set random seed
-random_seed = 1
-random.seed(random_seed)
-np.random.seed(random_seed)
-torch.manual_seed(random_seed)
 
 # set device
 cuda_available = torch.cuda.is_available()
 if cuda_available:
     torch.backends.cudnn.enabled = True
     torch.backends.cudnn.benchmark = True
-    torch.cuda.manual_seed(random_seed)
 
 # define OFA network, configuration of adaptive let
 ks_size_list = [3, 5, 7]
@@ -191,6 +185,13 @@ for network_config in network_configs:
         loss, (top1, top5) = run_manager.validate(net=ofa_network, data_loader=val_dataset, no_logs=True)
         results['measured_acc'] = top1
         print('> Accuracy on 1k Imagenet Subset: ', top1)
+
+    folder_name = r'mbv3_100_random_subnets'
+    os.makedirs(folder_name, exist_ok=True)
+    file_id = utils.file_id()
+    filename = folder_name + '/' + file_id + '_simplified.onnx'
+    results['file_id'] = file_id
+    utils.export_as_simplified_onnx(subnet.cpu(), filename, network_config['r'][0])
 
     # write results to CSV-file
     csv_writer.writerow(results)

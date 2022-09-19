@@ -1,58 +1,70 @@
 import datetime
-import annette.graph as graph
 
-from annette import get_database
-from annette.estimation.layer_model import Layer_model
-from annette.estimation.mapping_model import Mapping_model
-from annette.graph import AnnetteGraph
-from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3, OFAResNets
-from result_net_configs import *
-from utils import timestamp_string, export_as_onnx, architecture_config_2_str
 import onnx
 from onnxsim import simplify
+
+from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3, OFAResNets
+from utils import timestamp_string_ms, export_as_onnx, architecture_config_2_str
+
+from settings import annette_enabled
+if annette_enabled:
+    import annette.graph as graph
+    from annette import get_database
+    from annette.estimation.layer_model import Layer_model
+    from annette.estimation.mapping_model import Mapping_model
+    from annette.graph import AnnetteGraph
 
 
 class AnnetteEstimator:
 
-    def __init__(self, mapping, layers):
-        valid_mapping = ['dnndk', 'ov', 'ov2', 'ov3']
-        valid_layers = ['dnndk-mixed',
-                        'dnndk-ref_roofline',
-                        'dnndk-roofline',
-                        'dnndk-statistical',
-                        'ncs2-mixed',
-                        'ncs2-ref_roofline',
-                        'ncs2-roofline',
-                        'ncs2-statistical',
-                        ]
+    if not annette_enabled:
+        raise Exception('Annette not enabled, check settings.py')
+    else:
+        def __init__(self, mapping, layers):
+            valid_mapping = ['dnndk', 'ov', 'ov2', 'ov3']
+            valid_layers = ['dnndk-mixed',
+                            'dnndk-ref_roofline',
+                            'dnndk-roofline',
+                            'dnndk-statistical',
+                            'ncs2-mixed',
+                            'ncs2-ref_roofline',
+                            'ncs2-roofline',
+                            'ncs2-statistical',
+                            ]
 
-        assert mapping in valid_mapping
-        assert layers in valid_layers
+            assert mapping in valid_mapping
+            assert layers in valid_layers
 
-        self.mapping = mapping
-        self.layers = layers
+            self.mapping = mapping
+            self.layers = layers
 
-        # load models
-        self.opt = Mapping_model.from_json(get_database('models', 'mapping', self.mapping + '.json'))
-        self.mod = Layer_model.from_json(get_database('models', 'layer', self.layers + '.json'))
+            # load models
+            self.opt = Mapping_model.from_json(get_database('models', 'mapping', self.mapping + '.json'))
+            self.mod = Layer_model.from_json(get_database('models', 'layer', self.layers + '.json'))
 
     def estimate(self, file_path, net_name='net'):
 
-        # load from annette json file
-        model = AnnetteGraph(net_name, file_path)
+        if not annette_enabled:
+            raise Exception('Annette not enabled, check settings.py')
+        else:
+            # load from annette json file
+            model = AnnetteGraph(net_name, file_path)
 
-        # estimate
-        self.opt.run_optimization(model)
-        res = self.mod.estimate_model(model)
+            # estimate
+            self.opt.run_optimization(model)
+            res = self.mod.estimate_model(model)
 
-        return res[0]
+            return res[0]
 
 
 def onnx_to_annette(onnx_network_path, inputs=None, annette_file_path='annette_tmp_file.json'):
-    onnx_network = graph.ONNXGraph(onnx_network_path)
-    annette_graph = onnx_network.onnx_to_annette(onnx_network_path, inputs)
-    annette_graph.to_json(annette_file_path)
-    return annette_file_path
+    if not annette_enabled:
+        raise Exception('Annette not enabled, check settings.py')
+    else:
+        onnx_network = graph.ONNXGraph(onnx_network_path)
+        annette_graph = onnx_network.onnx_to_annette(onnx_network_path, inputs)
+        annette_graph.to_json(annette_file_path)
+        return annette_file_path
 
 
 def ofa_config_to_onnx(ofa_net_config, net_architecture_name):
@@ -87,7 +99,7 @@ def ofa_config_to_onnx(ofa_net_config, net_architecture_name):
     else:
         raise NotImplementedError
 
-    model_file_name = 'logs/' + timestamp_string() + '.onnx'
+    model_file_name = 'logs/' + timestamp_string_ms() + '.onnx'
     simplified_model_file_name = 'logs/' + net_architecture_name + '_' + architecture_config_2_str(ofa_net_config) + '_simplified.onnx'
     export_as_onnx(subnet, model_file_name)
     onnx_model = onnx.load(model_file_name)

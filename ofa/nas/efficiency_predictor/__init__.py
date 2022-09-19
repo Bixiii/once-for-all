@@ -3,20 +3,21 @@
 # International Conference on Learning Representations (ICLR), 2020.
 
 import copy
-
-from utils import *
-
-from .latency_lookup_table import *
-
-from generate_annette_format import AnnetteConverter
-from annette import get_database
-from annette.estimation.layer_model import Layer_model
-from annette.estimation.mapping_model import Mapping_model
-from annette.graph import AnnetteGraph, ONNXGraph
 from pathlib import Path
+
 import onnx
 from onnxsim import simplify
-from ofa.utils.layers import LinearLayer
+
+from utils import *
+from .latency_lookup_table import *
+
+from settings import annette_enabled
+if annette_enabled:
+    from generate_annette_format import AnnetteConverter
+    from annette import get_database
+    from annette.estimation.layer_model import Layer_model
+    from annette.estimation.mapping_model import Mapping_model
+    from annette.graph import AnnetteGraph, ONNXGraph
 
 
 class BaseEfficiencyModel:
@@ -114,48 +115,54 @@ class AnnetteLatencyModel(BaseEfficiencyModel):
               ]
 
     def __init__(self, ofa_net, model='dnndk-mixed'):
-        super().__init__(ofa_net)
-        os.makedirs('./exp/tmp/', exist_ok=True)
 
-        assert(model in AnnetteLatencyModel.layers)
-        layer = model
-
-        if 'dnndk' in layer:
-            mapping = 'dnndk'
-        elif 'ncs2' in layer:
-            mapping = 'ov'
+        if not annette_enabled:
+            raise Exception('Annette not enabled, check settings.py')
         else:
-            raise NotImplementedError
+            super().__init__(ofa_net)
+            os.makedirs('./exp/tmp/', exist_ok=True)
 
-        # load models
-        self.opt = Mapping_model.from_json(get_database('models', 'mapping', mapping + '.json'))
-        self.mod = Layer_model.from_json(get_database('models', 'layer', layer + '.json'))
+            assert(model in AnnetteLatencyModel.layers)
+            layer = model
 
-        logger.info('Initialized Annette with layer model <%s> and mapping model <%s>' % (layer, mapping))
+            if 'dnndk' in layer:
+                mapping = 'dnndk'
+            elif 'ncs2' in layer:
+                mapping = 'ov'
+            else:
+                raise NotImplementedError
 
-        # set up ofa-2-annette converter
-        network_template = project_root() + '/resources/generalized_mbv3.json'
-        self.annette_converter = AnnetteConverter(network_template)
+            # load models
+            self.opt = Mapping_model.from_json(get_database('models', 'mapping', mapping + '.json'))
+            self.mod = Layer_model.from_json(get_database('models', 'layer', layer + '.json'))
+
+            logger.info('Initialized Annette with layer model <%s> and mapping model <%s>' % (layer, mapping))
+
+            # set up ofa-2-annette converter
+            network_template = project_root() + '/resources/generalized_mbv3.json'
+            self.annette_converter = AnnetteConverter(network_template)
 
     def predict_efficiency(self, arch_dict):
-        # logger.debug('Start ANNETTE efficiency prediction')
-        annette_network = self.annette_converter.create_annette_format(ks=arch_dict['ks'], e=arch_dict['e'],
-                                                                       d=arch_dict['d'], r=arch_dict['image_size'])
-        # save file
-        annette_network_path = './exp/tmp/mbv3-annette_%s.json' % (architecture_config_2_str(arch_dict))
-        new_json_file = open(annette_network_path, 'w')
-        new_json_file.write(annette_network)
-        new_json_file.close()
+        if not annette_enabled:
+            raise Exception('Annette not enabled, check settings.py')
+        else:
+            annette_network = self.annette_converter.create_annette_format(ks=arch_dict['ks'], e=arch_dict['e'],
+                                                                           d=arch_dict['d'], r=arch_dict['image_size'])
+            # save file
+            annette_network_path = './exp/tmp/mbv3-annette_%s.json' % (architecture_config_2_str(arch_dict))
+            new_json_file = open(annette_network_path, 'w')
+            new_json_file.write(annette_network)
+            new_json_file.close()
 
-        # load from annette json file
-        model = AnnetteGraph('ofa-net', annette_network_path)
+            # load from annette json file
+            model = AnnetteGraph('ofa-net', annette_network_path)
 
-        # estimate
-        self.opt.run_optimization(model)
-        res = self.mod.estimate_model(model)
+            # estimate
+            self.opt.run_optimization(model)
+            res = self.mod.estimate_model(model)
 
-        # logger.debug('Finished ANNETTE efficiency prediction')
-        return res[0]
+            # logger.debug('Finished ANNETTE efficiency prediction')
+            return res[0]
 
     def get_efficiency(self, arch_dict):
         return self.predict_efficiency(arch_dict)
@@ -178,54 +185,60 @@ class AnnetteLatencyModelResNet50(BaseEfficiencyModel):
         super().__init__(ofa_net)
         os.makedirs('./tmp/', exist_ok=True)
 
-        assert(model in AnnetteLatencyModel.layers)
-        layer = model
-
-        if 'dnndk' in layer:
-            mapping = 'dnndk'
-        elif 'ncs2' in layer:
-            mapping = 'ov2'
+        if not annette_enabled:
+            raise Exception('Annette not enabled, check settings.py')
         else:
-            raise NotImplementedError
+            assert(model in AnnetteLatencyModel.layers)
+            layer = model
 
-        # load models
-        self.opt = Mapping_model.from_json(get_database('models', 'mapping', mapping + '.json'))
-        self.mod = Layer_model.from_json(get_database('models', 'layer', layer + '.json'))
+            if 'dnndk' in layer:
+                mapping = 'dnndk'
+            elif 'ncs2' in layer:
+                mapping = 'ov2'
+            else:
+                raise NotImplementedError
 
-        logger.info('Initialized Annette with layer model <%s> and mapping model <%s>' % (layer, mapping))
+            # load models
+            self.opt = Mapping_model.from_json(get_database('models', 'mapping', mapping + '.json'))
+            self.mod = Layer_model.from_json(get_database('models', 'layer', layer + '.json'))
+
+            logger.info('Initialized Annette with layer model <%s> and mapping model <%s>' % (layer, mapping))
 
     def predict_efficiency(self, arch_dict):
 
         # get ANNETTE latency estimation: export as ONNX, load ONNX for ANNETTE, make prediction
-        self.ofa_net.set_active_subnet(d=arch_dict['d'], e=arch_dict['e'], w=arch_dict['w'])
-        subnet = self.ofa_net.get_active_subnet()
+        if not annette_enabled:
+            raise Exception('Annette not enabled, check settings.py')
+        else:
+            self.ofa_net.set_active_subnet(d=arch_dict['d'], e=arch_dict['e'], w=arch_dict['w'])
+            subnet = self.ofa_net.get_active_subnet()
 
-        model_file_name = './tmp/' + timestamp_string() + '.onnx'
-        simplified_model_file_name = './tmp/' + timestamp_string() + 'simplified.onnx'
-        annette_model_file_name = './tmp/' + timestamp_string() + '.json'
+            model_file_name = './tmp/' + timestamp_string_ms() + '.onnx'
+            simplified_model_file_name = './tmp/' + timestamp_string_ms() + 'simplified.onnx'
+            annette_model_file_name = './tmp/' + timestamp_string_ms() + '.json'
 
-        # convert to simplified ONNX
-        export_as_onnx(subnet, model_file_name, arch_dict['image_size'])
-        onnx_model = onnx.load(model_file_name)
-        simplified_model, check = simplify(onnx_model)
-        onnx.save(simplified_model, simplified_model_file_name)
+            # convert to simplified ONNX
+            export_as_onnx(subnet, model_file_name, arch_dict['image_size'])
+            onnx_model = onnx.load(model_file_name)
+            simplified_model, check = simplify(onnx_model)
+            onnx.save(simplified_model, simplified_model_file_name)
 
-        # convert to annette graph
-        onnx_network = ONNXGraph(simplified_model_file_name)
-        annette_graph = onnx_network.onnx_to_annette(simplified_model_file_name, ['input.1'], name_policy='renumerate')
-        json_file = Path(annette_model_file_name)
-        annette_graph.to_json(json_file)
-        model = AnnetteGraph('ofa-net', annette_model_file_name)
+            # convert to annette graph
+            onnx_network = ONNXGraph(simplified_model_file_name)
+            annette_graph = onnx_network.onnx_to_annette(simplified_model_file_name, ['input.1'], name_policy='renumerate')
+            json_file = Path(annette_model_file_name)
+            annette_graph.to_json(json_file)
+            model = AnnetteGraph('ofa-net', annette_model_file_name)
 
-        # make latency prediction
-        self.opt.run_optimization(model)
-        res = self.mod.estimate_model(model)
+            # make latency prediction
+            self.opt.run_optimization(model)
+            res = self.mod.estimate_model(model)
 
-        # clean up temporary files
-        os.remove(model_file_name)
-        os.remove(simplified_model_file_name)
-        os.remove(annette_model_file_name)
-        return res[0]
+            # clean up temporary files
+            os.remove(model_file_name)
+            os.remove(simplified_model_file_name)
+            os.remove(annette_model_file_name)
+            return res[0]
 
     def get_efficiency(self, arch_dict):
         return self.predict_efficiency(arch_dict)
@@ -245,63 +258,67 @@ class AnnetteLatencyLayerPrediction:
               ]
 
     def __init__(self, model='dnndk-mixed'):
-        os.makedirs('./tmp/', exist_ok=True)
 
-        assert(model in AnnetteLatencyModel.layers)
-        layer = model
-
-        if 'dnndk' in layer:
-            mapping = 'dnndk'
-        elif 'ncs2' in layer:
-            mapping = 'ov2'
+        if not annette_enabled:
+            raise Exception('Annette not enabled, check settings.py')
         else:
-            raise NotImplementedError
+            os.makedirs('./tmp/', exist_ok=True)
 
-        # load models
-        self.opt = Mapping_model.from_json(get_database('models', 'mapping', mapping + '.json'))
-        self.mod = Layer_model.from_json(get_database('models', 'layer', layer + '.json'))
+            assert(model in AnnetteLatencyModel.layers)
+            layer = model
 
-        logger.info('Initialized Annette with layer model <%s> and mapping model <%s>' % (layer, mapping))
-        self.debug_file = open('./tmp/debug_prints.txt', 'w')
+            if 'dnndk' in layer:
+                mapping = 'dnndk'
+            elif 'ncs2' in layer:
+                mapping = 'ov2'
+            else:
+                raise NotImplementedError
 
-    def predict_efficiency(self, network_layer, input_size):
+            # load models
+            self.opt = Mapping_model.from_json(get_database('models', 'mapping', mapping + '.json'))
+            self.mod = Layer_model.from_json(get_database('models', 'layer', layer + '.json'))
 
-        logger.debug('Start ANNETTE efficiency prediction')
-        # get ANNETTE latency estimation: export as ONNX, load ONNX for ANNETTE, make prediction
+            logger.info('Initialized Annette with layer model <%s> and mapping model <%s>' % (layer, mapping))
+            self.debug_file = open('./tmp/debug_prints.txt', 'w')
 
-        model_file_name = './tmp/' + timestamp_string() + '.onnx'
-        simplified_model_file_name = './tmp/' + timestamp_string() + 'simplified.onnx'
-        annette_model_file_name = './tmp/' + timestamp_string() + '.json'
-        export_layer_as_onnx(network_layer, model_file_name, input_size)
+    def predict_efficiency(self, network_layer, input_size, tmp_files_name=''):
 
-        onnx_model = onnx.load(model_file_name)
-        simplified_model, check = simplify(onnx_model)
-        onnx.save(simplified_model, simplified_model_file_name)
+        if not annette_enabled:
+            raise Exception('Annette not enabled, check settings.py')
+        else:
+            logger.debug('Start ANNETTE efficiency prediction')
+            # get ANNETTE latency estimation: export as ONNX, load ONNX for ANNETTE, make prediction
 
-        onnx_network = ONNXGraph(simplified_model_file_name)
-        # if isinstance(network_layer, LinearLayer):
-        #     annette_graph = onnx_network.onnx_to_annette(simplified_model_file_name, ['input'],
-        #                                                  name_policy='renumerate')
-        # else:
-        #     annette_graph = onnx_network.onnx_to_annette(simplified_model_file_name, ['input.1'],
-        #                                                  name_policy='renumerate')
-        annette_graph = onnx_network.onnx_to_annette(simplified_model_file_name, None,
-                                                     name_policy='renumerate')
-        json_file = Path(annette_model_file_name)
-        annette_graph.to_json(json_file)
+            if not tmp_files_name:
+                name_id = file_id()
+                model_file_name = './tmp/' + name_id + '.onnx'
+                simplified_model_file_name = './tmp/' + name_id + '_simplified.onnx'
+                annette_model_file_name = './tmp/' + name_id + '.json'
+            else:
+                model_file_name = './tmp/' + tmp_files_name + '.onnx'
+                simplified_model_file_name = './tmp/' + tmp_files_name + '_simplified.onnx'
+                annette_model_file_name = './tmp/' + tmp_files_name + '.json'
 
-        model = AnnetteGraph('ofa-net', annette_model_file_name)
+            export_layer_as_onnx(network_layer, model_file_name, input_size)
+            onnx_model = onnx.load(model_file_name)
+            simplified_model, check = simplify(onnx_model)
+            onnx.save(simplified_model, simplified_model_file_name)
 
-        self.opt.run_optimization(model)
-        res = self.mod.estimate_model(model)
+            onnx_network = ONNXGraph(simplified_model_file_name)
+            annette_graph = onnx_network.onnx_to_annette(simplified_model_file_name, None, name_policy='renumerate')
+            json_file = Path(annette_model_file_name)
+            annette_graph.to_json(json_file)
 
-        # logger.info('Finished ANNETTE efficiency prediction, result <' + str(res[0]) + '>')
+            model = AnnetteGraph('ofa-net', annette_model_file_name)
+            self.opt.run_optimization(model)
+            res = self.mod.estimate_model(model)
 
-        os.remove(model_file_name)
-        os.remove(simplified_model_file_name)
-        os.remove(annette_model_file_name)
-        return res[0]
+            # logger.info('Finished ANNETTE efficiency prediction, result <' + str(res[0]) + '>')
+
+            os.remove(model_file_name)
+            # os.remove(simplified_model_file_name)
+            os.remove(annette_model_file_name)
+            return res[0]
 
     def get_efficiency(self, arch_dict):
         raise NotImplementedError
-        # return self.predict_efficiency(arch_dict)
