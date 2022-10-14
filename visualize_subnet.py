@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import result_net_configs
 
 
 class Visualisation:
@@ -9,7 +10,7 @@ class Visualisation:
         # can only me used for ANNETTE latency estimation
         self.mbv3_small_block_widths = [16, 24, 24, 24, 0, 40, 40, 40, 0, 48, 48, 48, 0, 96, 96, 96, 0, 0, 0, 0]
 
-    def mbv3_barchart(self, subnet_config, save_path=None, title=None, show=False, show_fixed=True, relative=True):
+    def mbv3_barchart(self, subnet_config, save_path=None, title=None, show=False, show_fixed=True, relative=True, color=None):
         """
         Draws a barchart visualizing the subnetwork from a OFA-configuration
         Args:
@@ -40,7 +41,7 @@ class Visualisation:
         if show_fixed:
             bar_idx.append(1)
             bar_height.append(3 / 8)
-            bar_colour.append('black')
+            bar_colour.append('#828282')
             if relative:
                 bar_length.append(100)
             else:
@@ -48,7 +49,7 @@ class Visualisation:
 
             bar_idx.append(2)
             bar_height.append(3 / 8)
-            bar_colour.append('black')
+            bar_colour.append('#828282')
             if relative:
                 bar_length.append(100)
             else:
@@ -80,7 +81,10 @@ class Visualisation:
                 else:
                     bar_length.append(layers[idx]['e'])
                 bar_height.append(layers[idx]['ks'] / 8)
-                bar_colour.append('blue')
+                if not color:
+                    bar_colour.append('blue')
+                else:
+                    bar_colour.append(color)
                 kernel_remaining = kernel_remaining + layers[idx]['ks']
                 kernel_total = kernel_total + layers[idx]['ks']
                 channel_remaining = channel_remaining + layers[idx]['e'] / (self.mbv3_large_block_widths[idx] * 6)
@@ -89,7 +93,10 @@ class Visualisation:
             else:
                 bar_length.append(0)
                 bar_height.append(0)
-                bar_colour.append('blue')
+                if not color:
+                    bar_colour.append('blue')
+                else:
+                    bar_colour.append(color)
 
                 kernel_total = kernel_total + layers[idx]['ks']
                 channel_total = channel_total + layers[idx]['e'] / (self.mbv3_large_block_widths[idx] * 6)
@@ -97,14 +104,14 @@ class Visualisation:
         if show_fixed:
             bar_idx.append(23)
             bar_height.append(1 / 8)
-            bar_colour.append('black')
+            bar_colour.append('#828282')
             if relative:
                 bar_length.append(100)
             else:
                 bar_length.append(960)
             bar_idx.append(24)
             bar_height.append(1 / 8)
-            bar_colour.append('black')
+            bar_colour.append('#828282')
             if relative:
                 bar_length.append(100)
             else:
@@ -113,7 +120,7 @@ class Visualisation:
         fig, ax = plt.subplots()
         plt.rcdefaults()
 
-        chart = plt.barh(bar_idx, bar_length, align='edge', alpha=0.5, color=bar_colour)
+        chart = plt.barh(bar_idx, bar_length, align='edge', alpha=0.9, color=bar_colour)
 
         for i, obj in enumerate(chart):
             obj.set_height(bar_height[i])
@@ -150,21 +157,33 @@ mbv3_test_networks = [
         # 0 means that this block will be removed
         'title': 'OFA-MobileNetV3 random network architecture',
         'config': {'ks': [3, 3, 3, 0, 0, 5, 5, 5, 0, 3, 3, 3, 3, 3, 3, 0, 0, 5, 5, 5],
-                   'e':  [1, 2.67, 3, 0, 0, 1.8, 3, 3, 0, 3, 2.5, 2.3, 2.3, 4.29, 6, 0, 0, 4.2, 6, 6],
-                   'd':  [2, 3, 4, 2, 3], 'r': 224},
+                   'e': [1, 2.67, 3, 0, 0, 1.8, 3, 3, 0, 3, 2.5, 2.3, 2.3, 4.29, 6, 0, 0, 4.2, 6, 6],
+                   'd': [2, 3, 4, 2, 3], 'r': 224},
         'save_path': 'figures/ofa_mbv3_default.png',
     },
     {
         'title': 'OFA-MobileNetV3 largest network architecture ',
         'config': {'ks': [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7],
-                   'e':  [6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6],
-                   'd':  [4, 4, 4, 4, 4], 'r': 224},
+                   'e': [6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6],
+                   'd': [4, 4, 4, 4, 4], 'r': 224},
         'save_path': 'figures/ofa_mbv3_max.png',
     },
 ]
 
+pic_num = 1
+
 if __name__ == '__main__':
 
     drawing = Visualisation()
-    drawing.mbv3_barchart(mbv3_test_networks[1]['config'], 'max_net.png', 'Largest OFA-MobileNetV3 Architecture', show=True,
-                          show_fixed=True, relative=True)
+    grey = result_net_configs.mbv3_flop_constrained_pruning_evaluation[0:3]
+    light_blue = result_net_configs.mbv3_flop_constrained_pruning_evaluation[4:7]
+    light_green = result_net_configs.mbv3_flop_constrained_pruning_evaluation[8:11]
+
+    blue = [result_net_configs.mbv3_flop_constrained_pruning_evaluation[3]]
+    blue.append(result_net_configs.mbv3_flop_constrained_pruning_evaluation[7])
+
+    for config in blue:
+        drawing.mbv3_barchart(config['config'], str(pic_num) + '.png', 'Efficiency: ' + '{:3.1f}'.format(config['efficiency']) + 'MFLOPs, Accuracy: '
+                              + '{:2.2f}'.format(config['accuracy']*100) + '%', show=True,
+                              show_fixed=True, relative=True, color='#3A51BB')
+        pic_num = pic_num + 1
