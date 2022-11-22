@@ -4,7 +4,8 @@ from torch import nn
 
 from ofa.imagenet_classification.elastic_nn.modules.dynamic_layers import DynamicConvLayer, DynamicLinearLayer
 from ofa.imagenet_classification.elastic_nn.modules.dynamic_layers import DynamicResNetBottleneckBlock
-from ofa.imagenet_classification.networks.resnets import InputStemLayers, ResNetStageLayers, ResNetBlockLayer, ResNetClassifier
+from ofa.imagenet_classification.networks.resnets import InputStemLayers, ResNetStageLayers, ResNetBlockLayer, \
+    ResNetClassifier
 from ofa.nas.efficiency_predictor import AnnetteLatencyLayerPrediction
 from ofa.utils.layers import IdentityLayer, ResidualBlock
 from ofa.imagenet_classification.networks import ResNets
@@ -64,7 +65,8 @@ class OFAResNets(ResNets):
         # build input stem
         if small_input_stem:
             input_stem = [
-                DynamicConvLayer(val2list(3), input_channel, input_stem_kernel_size, stride=input_stem_stride, use_bn=True, act_func='relu'),
+                DynamicConvLayer(val2list(3), input_channel, input_stem_kernel_size, stride=input_stem_stride,
+                                 use_bn=True, act_func='relu'),
             ]
             downsample_mode = 'conv'
         else:
@@ -272,13 +274,13 @@ class OFAResNets(ResNets):
         subnet.set_bn_param(**self.get_bn_param())
         return subnet
 
-    def predict_with_annette_lut(self, loaded_lut, subnet_config):
+    def predict_with_latency_lut(self, loaded_lut, subnet_config):
         """
-        Estimate the annette latency prediction with a look up table
+        Estimate the latency with a look up table
         Also see: build_annette_lut()
 
-        Args: loaded_lut (): path with the saved look-up-table for annette lantency estimations
-        subnet_config (): ofa config for subnet
+        Args: loaded_lut (): path with the saved look-up-table for latency estimations
+        subnet_config (): ofa subnet configuration
 
         Returns: latency prediction, list of file_ids from which the lut was created (only for debugging purposes)
 
@@ -288,15 +290,21 @@ class OFAResNets(ResNets):
         self.set_active_subnet(d=subnet_config['d'], e=subnet_config['e'], w=subnet_config['w'])
         latency = 0
         input_channel = self.input_stem[2].active_out_channel
-        latency = latency + loaded_lut[subnet_config['image_size']]['input_stem'][(subnet_config['d'][0], subnet_config['w'][0], subnet_config['w'][0])]['latency']
-        layer_files.append(loaded_lut[subnet_config['image_size']]['input_stem'][(subnet_config['d'][0], subnet_config['w'][0], subnet_config['w'][0])]['tmp_file'])
+        latency = latency + loaded_lut[subnet_config['image_size']]['input_stem'][
+            (subnet_config['d'][0], subnet_config['w'][0], subnet_config['w'][0])]['latency']
+        layer_files.append(loaded_lut[subnet_config['image_size']]['input_stem'][
+                               (subnet_config['d'][0], subnet_config['w'][0], subnet_config['w'][0])]['tmp_file'])
 
         for stage_id, block_idx in enumerate(self.grouped_block_index):
             depth_param = self.runtime_depth[stage_id]
             active_idx = block_idx[:len(block_idx) - depth_param]
             for idx in active_idx:
-                latency = latency + loaded_lut[subnet_config['image_size']]['blocks'][input_channel, self.blocks[idx].active_middle_channels, self.blocks[idx].active_out_channel]['latency']
-                layer_files.append(loaded_lut[subnet_config['image_size']]['blocks'][input_channel, self.blocks[idx].active_middle_channels, self.blocks[idx].active_out_channel]['tmp_file'])
+                latency = latency + loaded_lut[subnet_config['image_size']]['blocks'][
+                    input_channel, self.blocks[idx].active_middle_channels, self.blocks[idx].active_out_channel][
+                    'latency']
+                layer_files.append(loaded_lut[subnet_config['image_size']]['blocks'][
+                                       input_channel, self.blocks[idx].active_middle_channels, self.blocks[
+                                           idx].active_out_channel]['tmp_file'])
                 input_channel = self.blocks[idx].active_out_channel
 
         latency = latency + loaded_lut[subnet_config['image_size']]['classifier'][input_channel]['latency']
@@ -314,7 +322,8 @@ class OFAResNets(ResNets):
 
         """
 
-        assert (image_size in [128, 144, 160, 176, 192, 224, 240, 256])  # image resolution has to be one of these values
+        assert (image_size in [128, 144, 160, 176, 192, 224, 240,
+                               256])  # image resolution has to be one of these values
 
         annette_layer_latency_predictor = AnnetteLatencyLayerPrediction(model=target_hardware)
 
@@ -345,18 +354,19 @@ class OFAResNets(ResNets):
                     input_stem.set_bn_param(**self.get_bn_param())
 
                     file_name_id = utils.file_id()
-                    latency = annette_layer_latency_predictor.predict_efficiency(input_stem, (1, 3, image_size, image_size), file_name_id)
+                    latency = annette_layer_latency_predictor.predict_efficiency(input_stem,
+                                                                                 (1, 3, image_size, image_size),
+                                                                                 file_name_id)
                     # to select input stem d0, w0 and w1 are needed
                     lut_key = (d0, w0, w1)
                     input_stem_latency_dict[lut_key] = {'latency': latency, 'tmp_file': file_name_id}
-
 
         ##########
         # blocks #
         ##########
         blocks_latency_dict = {}
 
-        resolution = int(math.ceil(image_size/4))
+        resolution = int(math.ceil(image_size / 4))
 
         for stage_id, block_idx in enumerate(self.grouped_block_index):
             new_stage = True
@@ -382,19 +392,21 @@ class OFAResNets(ResNets):
                             # get block
                             block = ResNetBlockLayer(self.blocks[idx].get_active_subnet(input_channel, False))
                             # skip redundant blocks
-                            if (input_channel, self.blocks[idx].active_middle_channels, self.blocks[idx].active_out_channel) in blocks_latency_dict:
+                            if (input_channel, self.blocks[idx].active_middle_channels,
+                                self.blocks[idx].active_out_channel) in blocks_latency_dict:
                                 continue
 
                             file_name_id = utils.file_id()
                             # make latency prediction
-                            latency = annette_layer_latency_predictor.predict_efficiency(block, (1, input_channel, resolution, resolution), file_name_id)
-                            lut_key = (input_channel, self.blocks[idx].active_middle_channels, self.blocks[idx].active_out_channel)
+                            latency = annette_layer_latency_predictor.predict_efficiency(block, (
+                            1, input_channel, resolution, resolution), file_name_id)
+                            lut_key = (
+                            input_channel, self.blocks[idx].active_middle_channels, self.blocks[idx].active_out_channel)
                             blocks_latency_dict[lut_key] = {'latency': latency, 'tmp_file': file_name_id}
-
 
                         # parameters for next block
                         if down_sample_block and stage_id != 0:
-                            resolution = int(resolution/2)
+                            resolution = int(resolution / 2)
                         down_sample_block = False
                         new_stage = False
 
@@ -407,11 +419,13 @@ class OFAResNets(ResNets):
             classifier = ResNetClassifier(self.classifier.get_active_subnet(input_channel, False))
 
             file_name_id = utils.file_id()
-            latency = annette_layer_latency_predictor.predict_efficiency(classifier, (1, input_channel, int(math.ceil(image_size / 32)), int(math.ceil(image_size / 32))), file_name_id)
+            latency = annette_layer_latency_predictor.predict_efficiency(classifier, (
+            1, input_channel, int(math.ceil(image_size / 32)), int(math.ceil(image_size / 32))), file_name_id)
             lut_key = input_channel
             classifier_latency_dict[lut_key] = {'latency': latency, 'tmp_file': file_name_id}
 
-        return {'input_stem': input_stem_latency_dict, 'blocks': blocks_latency_dict, 'classifier': classifier_latency_dict}
+        return {'input_stem': input_stem_latency_dict, 'blocks': blocks_latency_dict,
+                'classifier': classifier_latency_dict}
 
     def build_annette_lut(self, image_sizes, target_hardware, file_name):
         if image_sizes is None:
@@ -431,6 +445,138 @@ class OFAResNets(ResNets):
         print('Saved the file with the LUT to ' + file_name)
         return annette_latency_lut
 
+    def build_single_latency_lut(self, image_size, csv_measurements):
+        """
+        Read latency measurements from csv for all sub-elements of the OFA network and store them in a dict.
+        This can be used as look-up-table (lut) to get the latency estimations of a ofa-subnet
+        Args:
+            image_size (): input image size
+            csv_measurements (): csv file containing the measurements, first column id, second column latency
+
+        Returns: dictionary containing latency estimations for each sub-element in the ofa-network
+
+        """
+
+        # image resolution has to be one of these values
+        assert (image_size in [128, 144, 160, 176, 192, 224, 240, 256])
+
+        csv_file = open(csv_measurements)
+        csv_reader = csv.reader(csv_file, delimiter=',')
+        csv_as_list = list(csv_reader)
+
+        ##############
+        # input stem #
+        ##############
+        input_stem_latency_dict = {}
+        depth_config = [2, 2, 2, 2, 2]
+        expand_config = [0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35,
+                         0.35, 0.35]
+        width_config = [2, 2, 2, 2, 2, 2]
+        for d0 in [0, 1, 2]:
+            for w0 in [0, 1, 2]:
+                for w1 in [0, 1, 2]:
+                    depth_config[0] = d0
+                    width_config[0] = w0
+                    width_config[1] = w1
+                    self.set_active_subnet(d=depth_config, e=expand_config, w=width_config)
+                    input_stem = [self.input_stem[0].get_active_subnet(3, False)]
+                    if self.input_stem_skipping <= 0:
+                        input_stem.append(ResidualBlock(
+                            self.input_stem[1].conv.get_active_subnet(self.input_stem[0].active_out_channel, False),
+                            IdentityLayer(self.input_stem[0].active_out_channel, self.input_stem[0].active_out_channel)
+                        ))
+                    input_stem.append(
+                        self.input_stem[2].get_active_subnet(self.input_stem[0].active_out_channel, False))
+                    input_stem = InputStemLayers(input_stem)
+                    input_stem.set_bn_param(**self.get_bn_param())
+
+                    file_name_id = utils.file_id()
+                    latency = float(csv_as_list[int(file_name_id)][1])
+                    # to select input stem d0, w0 and w1 are needed
+                    lut_key = (d0, w0, w1)
+                    input_stem_latency_dict[lut_key] = {'latency': latency, 'tmp_file': file_name_id}
+
+        ##########
+        # blocks #
+        ##########
+        blocks_latency_dict = {}
+
+        resolution = int(math.ceil(image_size / 4))
+
+        for stage_id, block_idx in enumerate(self.grouped_block_index):
+            new_stage = True
+
+            # all possible width configurations
+            for w_in in [0, 1, 2]:
+                for w_out in [0, 1, 2]:
+
+                    down_sample_block = True
+                    for idx in block_idx:
+                        # reset resolution for next iteration
+                        if down_sample_block and not new_stage and stage_id != 0:
+                            resolution = resolution * 2
+
+                        # all possible expand configurations
+                        for e in [0.2, 0.25, 0.35]:
+
+                            # set all parameters
+                            input_channel = self.blocks[idx].in_channel_list[w_in]
+                            self.blocks[idx].active_out_channel = self.blocks[idx].out_channel_list[w_out]
+                            self.blocks[idx].active_expand_ratio = e  # middle channels are calculated from this
+
+                            # get block
+                            block = ResNetBlockLayer(self.blocks[idx].get_active_subnet(input_channel, False))
+                            # skip redundant blocks
+                            if (input_channel, self.blocks[idx].active_middle_channels,
+                                self.blocks[idx].active_out_channel) in blocks_latency_dict:
+                                continue
+
+                            file_name_id = utils.file_id()
+                            # make latency prediction
+                            latency = float(csv_as_list[int(file_name_id)][1])
+                            lut_key = (
+                            input_channel, self.blocks[idx].active_middle_channels, self.blocks[idx].active_out_channel)
+                            blocks_latency_dict[lut_key] = {'latency': latency, 'tmp_file': file_name_id}
+
+                        # parameters for next block
+                        if down_sample_block and stage_id != 0:
+                            resolution = int(resolution / 2)
+                        down_sample_block = False
+                        new_stage = False
+
+        ##############
+        # classifier #
+        ##############
+        classifier_latency_dict = {}
+        for w in [0, 1, 2]:
+            input_channel = self.classifier.in_features_list[w]
+            classifier = ResNetClassifier(self.classifier.get_active_subnet(input_channel, False))
+
+            file_name_id = utils.file_id()
+            latency = float(csv_as_list[int(file_name_id)][1])
+            lut_key = input_channel
+            classifier_latency_dict[lut_key] = {'latency': latency, 'tmp_file': file_name_id}
+
+        return {'input_stem': input_stem_latency_dict, 'blocks': blocks_latency_dict,
+                'classifier': classifier_latency_dict}
+
+    def build_latency_lut(self, csv_measurements, image_sizes=None, file_name=None):
+        if image_sizes is None:
+            image_sizes = [128, 144, 160, 176, 192, 224, 240, 256]
+
+        latency_lut = {}
+        for image_size in image_sizes:
+            latency_lut_one_resolution = self.build_single_latency_lut(image_size, csv_measurements)
+            latency_lut[image_size] = latency_lut_one_resolution
+
+        if not file_name:
+            file_name = 'LUT_ofa_resnet_' + 'from_measurements.pkl'
+        file = open(file_name, 'wb')
+        pickle.dump(latency_lut, file)
+        file.close()
+        print('Saved the file with the LUT to ' + file_name)
+        return latency_lut
+
     def get_active_net_config(self):
         input_stem_config = [self.input_stem[0].get_active_subnet_config(3)]
         if not self.small_input_stem:
@@ -438,7 +584,8 @@ class OFAResNets(ResNets):
                 input_stem_config.append({
                     'name': ResidualBlock.__name__,
                     'conv': self.input_stem[1].conv.get_active_subnet_config(self.input_stem[0].active_out_channel),
-                    'shortcut': IdentityLayer(self.input_stem[0].active_out_channel, self.input_stem[0].active_out_channel),
+                    'shortcut': IdentityLayer(self.input_stem[0].active_out_channel,
+                                              self.input_stem[0].active_out_channel),
                 })
             input_stem_config.append(self.input_stem[2].get_active_subnet_config(self.input_stem[0].active_out_channel))
             input_channel = self.input_stem[2].active_out_channel

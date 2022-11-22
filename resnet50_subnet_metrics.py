@@ -161,7 +161,7 @@ for subnet_config in subnet_configs:
         annette_latency_lut = pickle.load(annette_latency_lut_file)
         annette_latency_lut_file.close()
         efficiency_predictor = ResNet50AnnetteLUT(ofa_network, annette_latency_lut)
-        latency, _ = ofa_network.predict_with_annette_lut(annette_latency_lut, subnet_config)
+        latency, _ = ofa_network.predict_with_latency_lut(annette_latency_lut, subnet_config)
         results['dnndk_annette_lut'] = latency
         print('> latency (dnndk_annette_lut): ', latency, ' ms')
 
@@ -171,7 +171,7 @@ for subnet_config in subnet_configs:
         annette_latency_lut = pickle.load(annette_latency_lut_file)
         annette_latency_lut_file.close()
         efficiency_predictor = ResNet50AnnetteLUT(ofa_network, annette_latency_lut)
-        latency, _ = ofa_network.predict_with_annette_lut(annette_latency_lut, subnet_config)
+        latency, _ = ofa_network.predict_with_latency_lut(annette_latency_lut, subnet_config)
         results['ncs2_annette_lut'] = latency
         print('> latency (ncs2_annette_lut): ', latency, ' ms')
 

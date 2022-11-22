@@ -3,6 +3,10 @@ from utils import count_flops_thop, architecture_config_2_str
 from ofa.imagenet_classification.elastic_nn.networks import OFAResNets
 # from ofa.imagenet_classification.networks.resnets import *
 
+"""
+This script can be used to load subnets in pytorch to make measurements on the hardware
+"""
+
 # define parameters for OFA-network ResNet50
 depth_list = [0, 1, 2]
 expand_list = [0.2, 0.25, 0.35]

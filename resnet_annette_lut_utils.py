@@ -42,20 +42,26 @@ def build_annette_lut(annette_model, file_path=''):
     return latency_lut
 
 
+# build full LUT from hardware measurements
+def build_lut_from_measurements(csv_measurements):
+    latency_lut = ofa_network.build_latency_lut(csv_measurements)
+    return latency_lut
+
+
 # load ANNETTE LUT
-def load_annette_lut(file_path):
+def load_latency_lut(file_path):
     annette_latency_lut_file = open(file_path, 'rb')
     annette_latency_lut = pickle.load(annette_latency_lut_file)
     annette_latency_lut_file.close()
     return annette_latency_lut
 
 
-# make single prediction with ANNETTE LUT
-def annette_latency_lut_prediction(subnet_config, annette_latency_lut):
+# make single prediction with latency LUT
+def latency_lut_prediction(subnet_config, latency_lut):
     start = time.time()
-    latency, layer_files = ofa_network.predict_with_annette_lut(annette_latency_lut, subnet_config)
+    latency, layer_files = ofa_network.predict_with_latency_lut(latency_lut, subnet_config)
     end = time.time()
-    print("Latency is " + str(latency) + ", estimation time was " + str(int((end - start) * 1000)) + "ms")
+    # print("Latency is " + str(latency) + ", estimation time was " + str(int((end - start) * 1000)) + "ms")
     return latency
 
 
@@ -66,7 +72,7 @@ def annette_latency_onnx_prediction(subnet_config):
     subnet = ofa_network.get_active_subnet()
     annette_latency_predictor = AnnetteLatencyLayerPrediction()
     latency = annette_latency_predictor.predict_efficiency(subnet, (
-    1, 3, subnet_config['image_size'], subnet_config['image_size']))
+        1, 3, subnet_config['image_size'], subnet_config['image_size']))
     end = time.time()
     print("Latency is " + str(latency) + ", estimation time was " + str(int((end - start) * 1000)) + "ms")
     return latency
@@ -76,19 +82,19 @@ def test_annette_lut():
     """
     Make a latency prediction with the annette-lut and print the file ids used from the annette-lut
     """
-    annette_latency_lut = load_annette_lut(path_annette_lut)
+    latency_lut = load_latency_lut()(path_annette_lut)
 
     subnet_config = ofa_network.sample_active_subnet()
     subnet_config['image_size'] = random.choice(image_sizes)
 
-    latency, layer_files = ofa_network.predict_with_annette_lut(annette_latency_lut, subnet_config)
+    latency, layer_files = ofa_network.predict_with_latency_lut(latency_lut, subnet_config)
     print(str(layer_files))
 
     subnet = ofa_network.get_active_subnet()
     export_as_simplified_onnx(subnet, 'ofa-resnet-test-net.onnx', subnet_config['image_size'])
 
 
-def evaluate_annette_lut():
+def evaluate_annette_latency_lut():
     """
     Make predictions with annette-lut and predictions with annette from onnx files
     Write results to csv file
@@ -97,7 +103,7 @@ def evaluate_annette_lut():
     csv_writer = csv.writer(results_csv_file)
     csv_writer.writerow(['prediction from LUT', 'prediction from ANNETTE'])  # write header
 
-    annette_latency_lut = load_annette_lut(path_annette_lut)
+    latency_lut = load_latency_lut(path_annette_lut)
 
     # for subnet_config in resnet50_flop_constrained:
     for num in range(1):
@@ -111,9 +117,56 @@ def evaluate_annette_lut():
         latency_from_onnx = annette_latency_predictor.predict_efficiency(subnet_config)
 
         # annette look up table (fast)
-        latency_from_lut, _ = ofa_network.predict_with_annette_lut(annette_latency_lut, subnet_config)
+        latency_from_lut, _ = ofa_network.predict_with_latency_lut(latency_lut, subnet_config)
 
         # save results to csv file
         csv_writer.writerow([latency_from_lut, latency_from_onnx])
 
     results_csv_file.close()
+
+
+def evaluate_latency_lut(path_lut):
+    """
+    Make predictions with LUT
+    Write network configuration, prediction results and used blocks (id of file with block) to csv file
+    """
+    results_csv_file = open('evaluate_latency_lut_resnet50.csv', 'w')
+    csv_writer = csv.writer(results_csv_file)
+    csv_writer.writerow(['config', 'prediction from LUT', 'used blocks (LUT file id)'])  # write header
+
+    latency_lut = load_latency_lut(path_lut)
+
+    # for subnet_config in resnet50_flop_constrained:
+    for num in range(1):
+        # get random subnet configuration and resolution
+        subnet_config = ofa_network.sample_active_subnet()
+        image_size = random.choice(image_sizes)
+        subnet_config['image_size'] = image_size
+
+        # look up table prediction
+        latency_from_lut, used_blocks = ofa_network.predict_with_latency_lut(latency_lut, subnet_config)
+
+        # save results to csv file
+        csv_writer.writerow([str(subnet_config), latency_from_lut, used_blocks])
+
+    results_csv_file.close()
+
+
+# build_lut_from_measurements(r'D:\_Data\University\Master Thesis\Master Thesis\Data\resnet_look_up_table_ncs2_gflops.csv')
+
+lut = load_latency_lut(r'LUT_ofa_resnet_from_measurements_gflops.pkl')
+
+file = open(r'D:\_Data\University\Master Thesis\Data\resnet_combined_data.csv')
+csv_reader = csv.reader(file, delimiter=',')
+header = next(csv_reader)
+
+out_file = open('out_file.csv', '+w')
+csv_writer = csv.writer(out_file)
+#
+for row in csv_reader:
+    subnet_config = string_2_config_dict(row[0])
+    latency, layer_files = ofa_network.predict_with_latency_lut(lut, subnet_config)
+    print(row[1] + " vs. " + str(latency))
+    csv_writer.writerow([row[1], latency])
+
+

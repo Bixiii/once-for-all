@@ -69,7 +69,7 @@ class ResNet50AnnetteLUT(BaseEfficiencyModel):
     def get_efficiency(self, arch_dict):
         active_net_config, image_size = self.get_active_subnet_config(arch_dict)
         arch_dict['image_size'] = image_size
-        latency, _ = self.ofa_net.predict_with_annette_lut(loaded_lut=self.loaded_lut, subnet_config=arch_dict)
+        latency, _ = self.ofa_net.predict_with_latency_lut(loaded_lut=self.loaded_lut, subnet_config=arch_dict)
         return latency
 
 
